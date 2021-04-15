@@ -23,20 +23,14 @@ pub type QueryPair<'a> = (Cow<'a, str>, Option<Cow<'a, str>>);
 
 /// A type which can be parsed from and rendered to an HTTP path and query string.
 pub trait Route: Sized + Clone + Send + Sync + 'static {
-    /// The type returned by the [Self::path] method.
-    type PathIter: Iterator<Item = PathSegment<'static>>;
-
-    /// The type returned by the [Self::query] method.
-    type QueryIter: Iterator<Item = QueryPair<'static>>;
-
     /// Attempt to parse from the given path segments and query pairs.
     fn parse<'a, 'b>(path: impl Iterator<Item = PathSegment<'a>>, query: Option<impl Iterator<Item = QueryPair<'b>>>) -> Option<Self>;
 
-    /// Produce an iterator with the path segments.
-    fn path(&self) -> Self::PathIter;
+    /// Produce a `Vec` with the path segments.
+    fn path(&self) -> Vec<PathSegment>;
 
-    /// Produce an iterator with the query string pairs.
-    fn query(&self) -> Option<Self::QueryIter>;
+    /// Produce a `Vec` with the query string pairs.
+    fn query(&self) -> Option<Vec<QueryPair>>;
 
     /// Helper function that parses from a string instead of iterators.
     ///
@@ -46,14 +40,22 @@ pub trait Route: Sized + Clone + Send + Sync + 'static {
         Self::parse(path, query)
     }
 
-    /// Convenience method around [Self::path] which generates a `Vec`.
-    fn path_vec(&self) -> Vec<PathSegment<'static>> {
-        self.path().collect()
-    }
-
-    /// Convenience method around [Self::query] which generates a `Vec`.
-    fn query_vec(&self) -> Option<Vec<QueryPair<'static>>> {
-        self.query().map(|i| i.collect())
+    /// Helper function that renders this value into a `String`.
+    ///
+    /// For details on the exact output format, see [render_path_and_query].
+    fn render(&self) -> String {
+        render_path_and_query(
+            self.path().iter().map(|x| x.as_ref()),
+            match self.query() {
+                None => None,
+                Some(ref query) =>
+            Some(query.iter().map(|(k, v)|
+                (k.as_ref(), match v {
+                    Some(v) => Some(v.as_ref()),
+                    None => None,
+                })))
+            }
+        )
     }
 }
 
@@ -65,9 +67,6 @@ pub struct PlainRoute {
 }
 
 impl Route for PlainRoute {
-    type PathIter = ();
-    type QueryIter = ();
-
     fn parse<'a, 'b>(path: impl Iterator<Item = PathSegment<'a>>, query: Option<impl Iterator<Item = QueryPair<'b>>>) -> Option<Self> {
         Some(PlainRoute {
             path: path.map(Cow::into_owned).collect(),
@@ -75,11 +74,11 @@ impl Route for PlainRoute {
         })
     }
 
-    fn path(&self) -> Self::PathIter {
-        self.path.iter()
+    fn path(&self) -> Vec<Cow<'_, str>> {
+        self.path.iter().map(|s| Cow::Borrowed(s.as_str())).collect()
     }
 
-    fn query(&self) -> Option<Self::QueryIter> {
-        self.query.map(|v| v.iter().map(|(k, v)| (Cow::Borrowed(k), None)))
+    fn query(&self) -> Option<Vec<QueryPair>> {
+        todo!()
     }
 }

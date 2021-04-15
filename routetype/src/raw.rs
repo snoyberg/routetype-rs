@@ -111,6 +111,113 @@ fn parse_query_pair(pair: &str) -> QueryPair {
     }
 }
 
+/** Render path segments and query string pairs into a `String`.
+
+This function will always prepend with a leading forward slash:
+
+```rust
+# use routetype::raw::render_path_and_query;
+let path: Vec<&str> = vec![];
+let query: Option<std::iter::Empty<_>> = None;
+assert_eq!(render_path_and_query(path.iter().copied(), query), "/");
+
+// FIXME consider if this behavior is desired or not
+let path: Vec<&str> = vec![""];
+let query: Option<std::iter::Empty<_>> = None;
+assert_eq!(render_path_and_query(path.iter().copied(), query), "/");
+
+let path: Vec<&str> = vec!["hello", "world"];
+let query: Option<std::iter::Empty<_>> = None;
+assert_eq!(render_path_and_query(path.iter().copied(), query), "/hello/world");
+```
+
+It will only include a question mark if a query string is provided.
+
+```rust
+# use routetype::raw::render_path_and_query;
+let path: Vec<&str> = vec!["hello", "world"];
+let query: Option<std::iter::Empty<_>> = Some(std::iter::empty());
+assert_eq!(render_path_and_query(path.iter().copied(), query), "/hello/world?");
+```
+
+And similarly, it will only emit equal signs if a value is present.
+
+```rust
+# use routetype::raw::render_path_and_query;
+let path: Vec<&str> = vec![];
+let query: Vec<(&str, Option<&str>)> = vec![
+    ("foo", None),
+    ("bar", Some("")),
+    ("baz", Some("bin")),
+];
+assert_eq!(render_path_and_query(path.iter().copied(), Some(query.into_iter())), "/?foo&bar=&baz=bin");
+```
+
+Percent encoding is handled correctly.
+
+```rust
+# use routetype::raw::render_path_and_query;
+let path: Vec<&str> = vec![
+    "hello",
+    "שלום",
+    "wor/ld"
+];
+let query: Vec<(&str, Option<&str>)> = vec![
+    ("he?llo", Some("there#")),
+];
+assert_eq!(
+    render_path_and_query(path.into_iter(), Some(query.into_iter())),
+    "/hello/%D7%A9%D7%9C%D7%95%D7%9D/wor%2Fld?he?llo=there%23",
+);
+```
+*/
+pub fn render_path_and_query<'a, 'b, Path, Query>(path: Path, query: Option<Query>) -> String
+where
+    Path: Iterator<Item = &'a str>,
+    Query: Iterator<Item = (&'b str, Option<&'b str>)>
+{
+    use percent_encoding::{AsciiSet, CONTROLS};
+
+    fn encode_append(res: &mut String, s: &str, set: &'static AsciiSet) {
+        for s in percent_encoding::utf8_percent_encode(s, set) {
+            *res += s;
+        }
+    }
+
+    // https://url.spec.whatwg.org/#query-percent-encode-set
+    const QUERY_SET: AsciiSet = CONTROLS.add(b' ').add(b'"').add(b'#').add(b'<').add(b'>');
+    const PATH_SET: AsciiSet = QUERY_SET.add(b'?').add(b'`').add(b'{').add(b'}').add(b'/');
+
+    let mut res = String::new();
+    for segment in path {
+        res.push('/');
+        encode_append(&mut res, segment, &PATH_SET);
+    }
+    if res.is_empty() {
+        res.push('/');
+    }
+
+    if let Some(query) = query {
+        res.push('?');
+        let mut first = true;
+
+        for (key, value) in query {
+            if first {
+                first = false;
+            } else {
+                res.push('&');
+            }
+
+            encode_append(&mut res, key, &QUERY_SET);
+            if let Some(value) = value {
+                res.push('=');
+                encode_append(&mut res, value, &QUERY_SET);
+            }
+        }
+    }
+    res
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
