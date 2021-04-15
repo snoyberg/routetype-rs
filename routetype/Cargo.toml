@@ -10,4 +10,5 @@ percent-encoding = "2.1"
 [dependencies.routetype-derive]
 path = "../routetype-derive"
 
-[[tests]]
+[dev-dependencies]
+quickcheck = "1.0.3"

@@ -74,11 +74,37 @@ impl Route for PlainRoute {
         })
     }
 
-    fn path(&self) -> Vec<Cow<'_, str>> {
+    fn path(&self) -> Vec<PathSegment> {
         self.path.iter().map(|s| Cow::Borrowed(s.as_str())).collect()
     }
 
     fn query(&self) -> Option<Vec<QueryPair>> {
-        todo!()
+        match self.query {
+            None => None,
+            Some(ref query) => Some(
+                query.iter().map(|(k, v)| {
+                    (Cow::Borrowed(k.as_ref()), match v {
+                        None => None,
+                        Some(v) => Some(Cow::Borrowed(v.as_ref())),
+                    })
+                }).collect()
+            )
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quickcheck::*;
+
+    quickcheck! {
+        fn prop_round_trip_plainroute(path: Vec<String>, query: Option<Vec<(String, Option<String>)>>) -> bool {
+            let plainroute = PlainRoute { path, query };
+            let rendered: String = plainroute.render();
+            let parsed: PlainRoute = PlainRoute::parse_str(&rendered).unwrap();
+            assert_eq!(plainroute, parsed);
+            true
+        }
     }
 }
