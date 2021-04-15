@@ -1,0 +1,13 @@
+[package]
+name = "routetype"
+version = "0.1.0"
+authors = ["Michael Snoyman <michael@snoyman.com>"]
+edition = "2018"
+
+[dependencies]
+percent-encoding = "2.1"
+
+[dependencies.routetype-derive]
+path = "../routetype-derive"
+
+[[tests]]
