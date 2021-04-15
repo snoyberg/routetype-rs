@@ -2,8 +2,8 @@ mod either;
 /// Helper functions for parsing the raw strings received over the wire.
 pub mod raw;
 
-use std::borrow::Cow;
 pub use routetype_derive::*;
+use std::borrow::Cow;
 
 use raw::*;
 
@@ -24,7 +24,10 @@ pub type QueryPair<'a> = (Cow<'a, str>, Option<Cow<'a, str>>);
 /// A type which can be parsed from and rendered to an HTTP path and query string.
 pub trait Route: Sized + Clone + Send + Sync + 'static {
     /// Attempt to parse from the given path segments and query pairs.
-    fn parse<'a, 'b>(path: impl Iterator<Item = PathSegment<'a>>, query: Option<impl Iterator<Item = QueryPair<'b>>>) -> Option<Self>;
+    fn parse<'a, 'b>(
+        path: impl Iterator<Item = PathSegment<'a>>,
+        query: Option<impl Iterator<Item = QueryPair<'b>>>,
+    ) -> Option<Self>;
 
     /// Produce a `Vec` with the path segments.
     fn path(&self) -> Vec<PathSegment>;
@@ -48,13 +51,16 @@ pub trait Route: Sized + Clone + Send + Sync + 'static {
             self.path().iter().map(|x| x.as_ref()),
             match self.query() {
                 None => None,
-                Some(ref query) =>
-            Some(query.iter().map(|(k, v)|
-                (k.as_ref(), match v {
-                    Some(v) => Some(v.as_ref()),
-                    None => None,
-                })))
-            }
+                Some(ref query) => Some(query.iter().map(|(k, v)| {
+                    (
+                        k.as_ref(),
+                        match v {
+                            Some(v) => Some(v.as_ref()),
+                            None => None,
+                        },
+                    )
+                })),
+            },
         )
     }
 }
@@ -67,28 +73,43 @@ pub struct PlainRoute {
 }
 
 impl Route for PlainRoute {
-    fn parse<'a, 'b>(path: impl Iterator<Item = PathSegment<'a>>, query: Option<impl Iterator<Item = QueryPair<'b>>>) -> Option<Self> {
+    fn parse<'a, 'b>(
+        path: impl Iterator<Item = PathSegment<'a>>,
+        query: Option<impl Iterator<Item = QueryPair<'b>>>,
+    ) -> Option<Self> {
         Some(PlainRoute {
             path: path.map(Cow::into_owned).collect(),
-            query: query.map(|q| q.map(|(k, v)| (k.into_owned(), v.map(Cow::into_owned))).collect())
+            query: query.map(|q| {
+                q.map(|(k, v)| (k.into_owned(), v.map(Cow::into_owned)))
+                    .collect()
+            }),
         })
     }
 
     fn path(&self) -> Vec<PathSegment> {
-        self.path.iter().map(|s| Cow::Borrowed(s.as_str())).collect()
+        self.path
+            .iter()
+            .map(|s| Cow::Borrowed(s.as_str()))
+            .collect()
     }
 
     fn query(&self) -> Option<Vec<QueryPair>> {
         match self.query {
             None => None,
             Some(ref query) => Some(
-                query.iter().map(|(k, v)| {
-                    (Cow::Borrowed(k.as_ref()), match v {
-                        None => None,
-                        Some(v) => Some(Cow::Borrowed(v.as_ref())),
+                query
+                    .iter()
+                    .map(|(k, v)| {
+                        (
+                            Cow::Borrowed(k.as_ref()),
+                            match v {
+                                None => None,
+                                Some(v) => Some(Cow::Borrowed(v.as_ref())),
+                            },
+                        )
                     })
-                }).collect()
-            )
+                    .collect(),
+            ),
         }
     }
 }

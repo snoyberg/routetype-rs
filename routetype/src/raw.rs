@@ -1,6 +1,6 @@
 use super::either::Either;
-use std::borrow::Cow;
 use super::{PathSegment, QueryPair};
+use std::borrow::Cow;
 
 /** Parse a string containing both a path and query string.
 
@@ -15,7 +15,12 @@ assert!(parse_path_and_query("/foo/bar?").1.is_some());
 ```
 
 */
-pub fn parse_path_and_query(path_and_query: &str) -> (impl Iterator<Item = PathSegment>, Option<impl Iterator<Item = QueryPair>>) {
+pub fn parse_path_and_query(
+    path_and_query: &str,
+) -> (
+    impl Iterator<Item = PathSegment>,
+    Option<impl Iterator<Item = QueryPair>>,
+) {
     match path_and_query.find('?') {
         None => (parse_path(path_and_query), None),
         Some(idx) => {
@@ -176,7 +181,7 @@ assert_eq!(
 pub fn render_path_and_query<'a, 'b, Path, Query>(path: Path, query: Option<Query>) -> String
 where
     Path: Iterator<Item = &'a str>,
-    Query: Iterator<Item = (&'b str, Option<&'b str>)>
+    Query: Iterator<Item = (&'b str, Option<&'b str>)>,
 {
     use percent_encoding::{AsciiSet, NON_ALPHANUMERIC};
 
@@ -188,7 +193,12 @@ where
 
     // https://url.spec.whatwg.org/#query-percent-encode-set
     // FIXME we'd rather use CONTROL as a basis, but there doesn't seem to be a way to easily mask all non-ascii bytes.
-    const QUERY_SET: AsciiSet = NON_ALPHANUMERIC.add(b' ').add(b'"').add(b'#').add(b'<').add(b'>');
+    const QUERY_SET: AsciiSet = NON_ALPHANUMERIC
+        .add(b' ')
+        .add(b'"')
+        .add(b'#')
+        .add(b'<')
+        .add(b'>');
     const PATH_SET: AsciiSet = QUERY_SET.add(b'?').add(b'`').add(b'{').add(b'}').add(b'/');
 
     let mut res = String::new();
@@ -228,7 +238,11 @@ mod tests {
     fn pq(s: &str) -> (Vec<String>, Option<Vec<(String, Option<String>)>>) {
         let (path, query) = parse_path_and_query(s);
         let path = path.map(|x| x.into_owned()).collect();
-        let query = query.map(|query| query.map(|(x, y)| (x.into_owned(), y.map(|y| y.into_owned()))).collect());
+        let query = query.map(|query| {
+            query
+                .map(|(x, y)| (x.into_owned(), y.map(|y| y.into_owned())))
+                .collect()
+        });
         (path, query)
     }
 
@@ -257,12 +271,18 @@ mod tests {
     }
 
     fn make_query(x: &[(&str, Option<&str>)]) -> Vec<(String, Option<String>)> {
-        x.iter().copied().map(|(k, v)| (k.to_owned(), v.map(|v| v.to_owned()))).collect()
+        x.iter()
+            .copied()
+            .map(|(k, v)| (k.to_owned(), v.map(|v| v.to_owned())))
+            .collect()
     }
 
     #[test]
     fn plain_pieces() {
-        assert_eq!(pq("/foo/bar/baz"), (make_path(&["foo", "bar", "baz"]), None));
+        assert_eq!(
+            pq("/foo/bar/baz"),
+            (make_path(&["foo", "bar", "baz"]), None)
+        );
     }
 
     #[test]
@@ -273,15 +293,27 @@ mod tests {
 
     #[test]
     fn query_values_missing() {
-        assert_eq!(pq("?foo&bar=&baz=bin"), (vec![], Some(make_query(&[
-            ("foo", None),
-            ("bar", Some("")),
-            ("baz", Some("bin")),
-        ]))))
+        assert_eq!(
+            pq("?foo&bar=&baz=bin"),
+            (
+                vec![],
+                Some(make_query(&[
+                    ("foo", None),
+                    ("bar", Some("")),
+                    ("baz", Some("bin")),
+                ]))
+            )
+        )
     }
 
     #[test]
     fn question_in_query() {
-        assert_eq!(pq("/foo/?bar=baz?"), (make_path(&["foo", ""]), Some(make_query(&[("bar", Some("baz?"))]))))
+        assert_eq!(
+            pq("/foo/?bar=baz?"),
+            (
+                make_path(&["foo", ""]),
+                Some(make_query(&[("bar", Some("baz?"))]))
+            )
+        )
     }
 }
