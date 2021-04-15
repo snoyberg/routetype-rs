@@ -167,7 +167,9 @@ let query: Vec<(&str, Option<&str>)> = vec![
 ];
 assert_eq!(
     render_path_and_query(path.into_iter(), Some(query.into_iter())),
-    "/hello/%D7%A9%D7%9C%D7%95%D7%9D/wor%2Fld?he?llo=there%23",
+
+    // FIXME would be better "/hello/%D7%A9%D7%9C%D7%95%D7%9D/wor%2Fld?he?llo=there%23",
+    "/hello/%D7%A9%D7%9C%D7%95%D7%9D/wor%2Fld?he%3Fllo=there%23",
 );
 ```
 */
@@ -176,7 +178,7 @@ where
     Path: Iterator<Item = &'a str>,
     Query: Iterator<Item = (&'b str, Option<&'b str>)>
 {
-    use percent_encoding::{AsciiSet, CONTROLS};
+    use percent_encoding::{AsciiSet, NON_ALPHANUMERIC};
 
     fn encode_append(res: &mut String, s: &str, set: &'static AsciiSet) {
         for s in percent_encoding::utf8_percent_encode(s, set) {
@@ -185,7 +187,8 @@ where
     }
 
     // https://url.spec.whatwg.org/#query-percent-encode-set
-    const QUERY_SET: AsciiSet = CONTROLS.add(b' ').add(b'"').add(b'#').add(b'<').add(b'>');
+    // FIXME we'd rather use CONTROL as a basis, but there doesn't seem to be a way to easily mask all non-ascii bytes.
+    const QUERY_SET: AsciiSet = NON_ALPHANUMERIC.add(b' ').add(b'"').add(b'#').add(b'<').add(b'>');
     const PATH_SET: AsciiSet = QUERY_SET.add(b'?').add(b'`').add(b'{').add(b'}').add(b'/');
 
     let mut res = String::new();
