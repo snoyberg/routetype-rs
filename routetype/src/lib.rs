@@ -3,7 +3,7 @@ mod either;
 pub mod raw;
 
 pub use routetype_derive::*;
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::HashMap};
 
 use raw::*;
 
@@ -62,6 +62,67 @@ pub trait Route: Sized + Clone + Send + Sync + 'static {
                 })),
             },
         )
+    }
+}
+
+/// A trait for values which can be a part of the path segments or query string values.
+pub trait RoutePiece: Sized {
+    /// Attempt to parse a piece from a given string.
+    fn parse_route_piece(s: &str) -> Option<Self>;
+
+    /// Render this piece into a string.
+    fn render_route_piece(&self) -> Cow<str>;
+}
+
+impl RoutePiece for String {
+    fn parse_route_piece(s: &str) -> Option<Self> {
+        Some(s.to_owned())
+    }
+
+    fn render_route_piece(&self) -> Cow<str> {
+        Cow::Borrowed(self)
+    }
+}
+
+impl RoutePiece for i32 {
+    fn parse_route_piece(s: &str) -> Option<Self> {
+        s.parse().ok()
+    }
+
+    fn render_route_piece(&self) -> Cow<str> {
+        self.to_string().into()
+    }
+}
+
+/// A simplified view of query string parameters.
+pub struct QueryMap<'a> {
+    map: HashMap<Cow<'a, str>, (usize, Vec<Cow<'a, str>>)>,
+}
+
+impl<'a> QueryMap<'a> {
+    pub fn from_iter(query: Option<impl Iterator<Item = QueryPair<'a>>>) -> Self {
+        let mut map = HashMap::new();
+        let query = match query {
+            None => return QueryMap { map },
+            Some(query) => query
+        };
+        for (key, value) in query {
+            let entry = map.entry(key).or_insert_with(|| (0, Vec::new()));
+            match value {
+                None => entry.0 += 1,
+                Some(value) => entry.1.push(value),
+            }
+        }
+        QueryMap { map }
+    }
+
+    pub fn get_single(&self, name: &str) -> Option<&str> {
+        let (_, v) = self.map.get(name)?;
+        if v.len() == 1 {
+            Some(&v[0])
+        } else {
+            None
+        }
     }
 }
 
