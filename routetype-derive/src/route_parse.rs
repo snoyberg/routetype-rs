@@ -23,6 +23,17 @@ impl Routes {
         res
     }
 
+    pub fn gen_query_arms(&self) -> TokenStream {
+        let mut res = TokenStream::new();
+        for route in &self.routes {
+            let pattern = route.gen_pattern();
+            let query_stmts = route.query_arm_stmts();
+
+            res.append_all(quote! { #pattern => { #query_stmts } });
+        }
+        res
+    }
+
     pub fn gen_parse_blocks(&self) -> TokenStream {
         let mut res = TokenStream::new();
         for route in &self.routes {
@@ -130,6 +141,16 @@ impl Route {
             VariantType::Unit(pq) => pq.path.iter().for_each(|seg| seg.path_arm_stmts(&mut ts)),
             VariantType::Positional(pq) => pq.path.iter().for_each(|seg| seg.path_arm_stmts(&mut ts)),
             VariantType::Named(pq) => pq.path.iter().for_each(|seg| seg.path_arm_stmts(&mut ts)),
+        }
+        ts
+    }
+
+    pub fn query_arm_stmts(&self) -> TokenStream {
+        let mut ts = TokenStream::new();
+        match &self.variant_type {
+            VariantType::Unit(pq) => pq.query.iter().for_each(|query| query.stmts(&mut ts)),
+            VariantType::Positional(pq) => pq.query.iter().for_each(|query| query.stmts(&mut ts)),
+            VariantType::Named(pq) => pq.query.iter().for_each(|query| query.stmts(&mut ts)),
         }
         ts
     }
@@ -536,6 +557,21 @@ pub struct Query<Field> {
 }
 
 impl<Field: AsField> Query<Field> {
+    fn stmts(&self, ts: &mut TokenStream) {
+        let key = &self.key;
+        ts.append_all(match &self.value {
+            None => quote! {
+                res.push((std::borrow::Cow::Borrowed(#key), None));
+            },
+            Some(RouteValue::Literal(value)) => quote! {
+                res.push((std::borrow::Cow::Borrowed(#key), Some(std::borrow::Cow::Borrowed(#value))));
+            },
+            Some(RouteValue::Field { local, .. }) => quote! {
+                res.push((std::borrow::Cow::Borrowed(#key), Some(routetype::RoutePiece::render_route_piece(&*#local))));
+            },
+        })
+    }
+
     fn gen_parse(&self, ts: &mut TokenStream) {
         let key = &self.key;
         ts.append_all(match &self.value {
@@ -546,7 +582,6 @@ impl<Field: AsField> Query<Field> {
                 if query.get_single(#key)? != #s { return None }
             },
             Some(RouteValue::Field { local, .. }) => quote! {
-                println!("looking up a value {:?}", query.get_single(#key));
                 let #local = routetype::RoutePiece::parse_route_piece(query.get_single(#key)?)?;
             }
         });

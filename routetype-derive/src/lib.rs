@@ -20,6 +20,7 @@ pub fn derive_route(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 fn derive_route_inner(routes: &Routes) -> TokenStream {
     let ident = &routes.ident;
     let path_arms = routes.gen_path_arms();
+    let query_arms = routes.gen_query_arms();
     let parse_blocks = routes.gen_parse_blocks();
 
     quote! {
@@ -45,7 +46,9 @@ fn derive_route_inner(routes: &Routes) -> TokenStream {
 
             fn query(&self) -> Option<Vec<routetype::QueryPair>> {
                 let mut res = Vec::new();
-                // FIXME
+                match self {
+                    #query_arms
+                }
                 if res.is_empty() {
                     None
                 } else {

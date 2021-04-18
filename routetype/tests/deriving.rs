@@ -48,7 +48,7 @@ fn parse_hello() {
 fn foo() {
     assert_eq!(MyRoute::parse_str("foo?bar=42"), Some(MyRoute::Foo { bar: 42 }));
     assert_eq!(MyRoute::parse_str("foo?bar=fortytwo"), None);
-    assert_eq!("foo?bar=42", MyRoute::Foo { bar: 42 }.render());
+    assert_eq!("/foo?bar=42", MyRoute::Foo { bar: 42 }.render());
 
     match MyRoute::parse_str("foo?bar=42").unwrap() {
         MyRoute::Foo { bar } => assert_eq!(bar, 42),
