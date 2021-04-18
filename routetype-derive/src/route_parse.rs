@@ -1,9 +1,9 @@
-use std::{convert::{Infallible, TryFrom, TryInto}, str::FromStr};
+use std::{convert::Infallible, str::FromStr};
 
 use anyhow::*;
-use proc_macro2::{Punct, TokenStream};
+use proc_macro2::TokenStream;
 use quote::{format_ident, quote, TokenStreamExt};
-use syn::{DeriveInput, Ident, token::Token};
+use syn::{DeriveInput, Ident};
 
 #[derive(Debug)]
 pub struct Routes {
@@ -396,15 +396,16 @@ impl AsField for Infallible {
         Err(anyhow!("Unit variants may not have any interpolations"))
     }
 
-    fn construct(&self, local: &Ident, ts: &mut TokenStream) {
+    fn construct(&self, _local: &Ident, _ts: &mut TokenStream) {
         panic!("Impossible! construct called on Infallible");
     }
 
     fn wrap_construct(ident: &Ident, contents: &TokenStream) -> TokenStream {
+        assert!(contents.is_empty());
         quote! { Self::#ident }
     }
 
-    fn gen_pattern(&self, local: &Ident, ts: &mut TokenStream) {
+    fn gen_pattern(&self, _local: &Ident, _ts: &mut TokenStream) {
         panic!("Impossible! gen_pattern called on Infallible");
     }
 }
