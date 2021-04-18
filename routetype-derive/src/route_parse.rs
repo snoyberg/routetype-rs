@@ -576,7 +576,7 @@ impl<Field: AsField> Query<Field> {
         let key = &self.key;
         ts.append_all(match &self.value {
             None => quote! {
-                if !quote.contains(#key) { return None }
+                if !query.contains(#key) { return None }
             },
             Some(RouteValue::Literal(s)) => quote! {
                 if query.get_single(#key)? != #s { return None }

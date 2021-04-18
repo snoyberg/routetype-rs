@@ -16,6 +16,12 @@ enum MyRoute {
     },
     #[route("/goodbye/{}")]
     Goodbye(String),
+    #[route("/?readiness")]
+    Readiness,
+    #[route("/?poll={}")]
+    Poll(bool),
+    #[route("/refresh?force=true")]
+    Refresh,
 }
 
 #[test]

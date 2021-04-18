@@ -94,6 +94,23 @@ impl RoutePiece for i32 {
     }
 }
 
+impl RoutePiece for bool {
+    fn parse_route_piece(s: &str) -> Option<Self> {
+        match s {
+            "true" => Some(true),
+            "false" => Some(false),
+            _ => None,
+        }
+    }
+
+    fn render_route_piece(&self) -> Cow<str> {
+        Cow::Borrowed(match self {
+            true => "true",
+            false => "false",
+        })
+    }
+}
+
 /// A simplified view of query string parameters.
 #[derive(Debug)]
 pub struct QueryMap<'a> {
@@ -124,6 +141,10 @@ impl<'a> QueryMap<'a> {
         } else {
             None
         }
+    }
+
+    pub fn contains(&self, name: &str) -> bool {
+        self.map.contains_key(name)
     }
 }
 
