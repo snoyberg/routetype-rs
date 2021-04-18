@@ -92,11 +92,11 @@ impl Route {
             VariantType::Positional(pq) => {
                 let patterns = pq.patterns();
                 quote! { Self::#ident(#patterns) }
-            },
+            }
             VariantType::Named(pq) => {
                 let patterns = pq.patterns();
                 quote! { Self::#ident { #patterns } }
-            },
+            }
         }
         /*
         match self.variant_type {
@@ -139,7 +139,9 @@ impl Route {
         let mut ts = TokenStream::new();
         match &self.variant_type {
             VariantType::Unit(pq) => pq.path.iter().for_each(|seg| seg.path_arm_stmts(&mut ts)),
-            VariantType::Positional(pq) => pq.path.iter().for_each(|seg| seg.path_arm_stmts(&mut ts)),
+            VariantType::Positional(pq) => {
+                pq.path.iter().for_each(|seg| seg.path_arm_stmts(&mut ts))
+            }
             VariantType::Named(pq) => pq.path.iter().for_each(|seg| seg.path_arm_stmts(&mut ts)),
         }
         ts
@@ -156,7 +158,8 @@ impl Route {
     }
 
     fn gen_parse_block(&self, res: &mut TokenStream) {
-        let (parse_path, parse_query, construct_route) = self.variant_type.gen_parse_pieces(&self.ident);
+        let (parse_path, parse_query, construct_route) =
+            self.variant_type.gen_parse_pieces(&self.ident);
         res.append_all(quote! {
             if let Some(route) = (|| {
                 let mut path = path.iter();
@@ -192,11 +195,14 @@ fn parse_path_fields<Field: AsField>(
         return Ok(vec![]);
     }
     let mut counter = 0;
-    raw_path.split('/').map(|raw_seg| {
-        let rv = RouteValue::parse(raw_seg, RouteValueType::Path, &mut counter)?;
-        rv.remove_field(fields)?;
-        Ok(Seg(rv))
-    }).collect()
+    raw_path
+        .split('/')
+        .map(|raw_seg| {
+            let rv = RouteValue::parse(raw_seg, RouteValueType::Path, &mut counter)?;
+            rv.remove_field(fields)?;
+            Ok(Seg(rv))
+        })
+        .collect()
 }
 
 fn parse_query_fields<Field: AsField>(
@@ -207,8 +213,9 @@ fn parse_query_fields<Field: AsField>(
         bail!("Empty query string specified, please omit the question mark");
     }
     let mut counter = 0;
-    let res: Result<_> = raw_query.split('&').map(|raw_pair| {
-        match raw_pair.find('=') {
+    let res: Result<_> = raw_query
+        .split('&')
+        .map(|raw_pair| match raw_pair.find('=') {
             None => Ok(Query {
                 key: raw_pair.to_owned(),
                 value: None,
@@ -223,8 +230,8 @@ fn parse_query_fields<Field: AsField>(
                     value: Some(value),
                 })
             }
-        }
-    }).collect();
+        })
+        .collect();
     if res.is_ok() && !fields.is_empty() {
         let mut unused = Vec::new();
         for field in &fields {
@@ -307,21 +314,31 @@ impl<Field: AsField> PathAndQuery<Field> {
     fn patterns(&self) -> TokenStream {
         let mut res = TokenStream::new();
         self.path.iter().for_each(|seg| seg.gen_pattern(&mut res));
-        self.query.iter().for_each(|query| query.gen_pattern(&mut res));
+        self.query
+            .iter()
+            .for_each(|query| query.gen_pattern(&mut res));
         res
     }
 
     /// parse the path, parse the query, construct the route
     fn gen_parse_pieces(&self, ident: &Ident) -> (TokenStream, TokenStream, TokenStream) {
         let mut parse_path = TokenStream::new();
-        self.path.iter().for_each(|seg| seg.gen_parse(&mut parse_path));
+        self.path
+            .iter()
+            .for_each(|seg| seg.gen_parse(&mut parse_path));
 
         let mut parse_query = TokenStream::new();
-        self.query.iter().for_each(|query| query.gen_parse(&mut parse_query));
+        self.query
+            .iter()
+            .for_each(|query| query.gen_parse(&mut parse_query));
 
         let mut construct = TokenStream::new();
-        self.path.iter().for_each(|seg| seg.construct(&mut construct));
-        self.query.iter().for_each(|query| query.construct(&mut construct));
+        self.path
+            .iter()
+            .for_each(|seg| seg.construct(&mut construct));
+        self.query
+            .iter()
+            .for_each(|query| query.construct(&mut construct));
         let construct_route = Field::wrap_construct(ident, &construct);
         (parse_path, parse_query, construct_route)
     }
@@ -370,8 +387,8 @@ impl FromStr for RouteValueRaw {
                 None => Ok(RouteValueRaw::Literal(s.to_owned())),
                 Some(s1) => match s1.strip_suffix('}') {
                     Some(s2) => Ok(RouteValueRaw::Named(format_ident!("{}", s2))),
-                    None => Err(anyhow!("Invalid route value {:?}", s))
-                }
+                    None => Err(anyhow!("Invalid route value {:?}", s)),
+                },
             }
         }
     }
@@ -584,7 +601,7 @@ impl<Field: AsField> Query<Field> {
             },
             Some(RouteValue::Field { local, .. }) => quote! {
                 let #local = routetype::RoutePiece::parse_route_piece(query.get_single(#key)?)?;
-            }
+            },
         });
     }
 

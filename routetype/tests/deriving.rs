@@ -7,13 +7,9 @@ enum MyRoute {
     #[route("style.css")]
     Style,
     #[route("hello/{name}")]
-    Hello {
-        name: String
-    },
+    Hello { name: String },
     #[route("foo?bar={bar}")]
-    Foo {
-        bar: i32
-    },
+    Foo { bar: i32 },
     #[route("/goodbye/{}")]
     Goodbye(String),
     #[route("/?readiness")]
@@ -36,7 +32,13 @@ fn render_style() {
 
 #[test]
 fn render_hello() {
-    assert_eq!(MyRoute::Hello { name: "alice".to_owned() }.render(), "/hello/alice");
+    assert_eq!(
+        MyRoute::Hello {
+            name: "alice".to_owned()
+        }
+        .render(),
+        "/hello/alice"
+    );
 }
 
 #[test]
@@ -46,19 +48,27 @@ fn parse_style() {
 
 #[test]
 fn parse_hello() {
-    assert_eq!(MyRoute::parse_str("/hello/alice"), Some(MyRoute::Hello { name: "alice".to_owned() }));
+    assert_eq!(
+        MyRoute::parse_str("/hello/alice"),
+        Some(MyRoute::Hello {
+            name: "alice".to_owned()
+        })
+    );
     assert_eq!(MyRoute::parse_str("/hello/alice/"), None);
 }
 
 #[test]
 fn foo() {
-    assert_eq!(MyRoute::parse_str("foo?bar=42"), Some(MyRoute::Foo { bar: 42 }));
+    assert_eq!(
+        MyRoute::parse_str("foo?bar=42"),
+        Some(MyRoute::Foo { bar: 42 })
+    );
     assert_eq!(MyRoute::parse_str("foo?bar=fortytwo"), None);
     assert_eq!("/foo?bar=42", MyRoute::Foo { bar: 42 }.render());
 
     match MyRoute::parse_str("foo?bar=42").unwrap() {
         MyRoute::Foo { bar } => assert_eq!(bar, 42),
-        _ => panic!()
+        _ => panic!(),
     }
 }
 

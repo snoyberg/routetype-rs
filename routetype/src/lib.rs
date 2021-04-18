@@ -122,7 +122,7 @@ impl<'a> QueryMap<'a> {
         let mut map = HashMap::new();
         let query = match query {
             None => return QueryMap { map },
-            Some(query) => query
+            Some(query) => query,
         };
         for (key, value) in query {
             let entry = map.entry(key).or_insert_with(|| (0, Vec::new()));

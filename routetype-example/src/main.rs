@@ -7,13 +7,9 @@ enum MyRoute {
     #[route("style.css")]
     Style,
     #[route("hello/{name}")]
-    Hello {
-        name: String
-    },
+    Hello { name: String },
     #[route("foo?bar={bar}")]
-    Foo {
-        bar: i32
-    }
+    Foo { bar: i32 },
 }
 
 fn main() {
