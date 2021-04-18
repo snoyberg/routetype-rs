@@ -5,45 +5,19 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote, TokenStreamExt};
 use syn::{DeriveInput, Ident};
 
+/// Represents the fields and attributes of a single user defined `enum` route type.
 #[derive(Debug)]
 pub struct Routes {
-    pub ident: Ident,
-    pub routes: Vec<Route>,
+    /// Name of the data type
+    ident: Ident,
+    /// Each of the variants/routes
+    routes: Vec<Route>,
 }
 
 impl Routes {
-    pub fn gen_path_arms(&self) -> TokenStream {
-        let mut res = TokenStream::new();
-        for route in &self.routes {
-            let pattern = route.gen_pattern();
-            let path_stmts = route.path_arm_stmts();
-
-            res.append_all(quote! { #pattern => { #path_stmts } });
-        }
-        res
-    }
-
-    pub fn gen_query_arms(&self) -> TokenStream {
-        let mut res = TokenStream::new();
-        for route in &self.routes {
-            let pattern = route.gen_pattern();
-            let query_stmts = route.query_arm_stmts();
-
-            res.append_all(quote! { #pattern => { #query_stmts } });
-        }
-        res
-    }
-
-    pub fn gen_parse_blocks(&self) -> TokenStream {
-        let mut res = TokenStream::new();
-        for route in &self.routes {
-            route.gen_parse_block(&mut res);
-        }
-        res
-    }
-}
-
-impl Routes {
+    /// Parse a `Routes` value from user supplied input.
+    ///
+    /// This should follow the principle of failing early, returning a helpful error message on any invalid input.
     pub fn parse(input: &DeriveInput) -> Result<Self> {
         let data = match &input.data {
             syn::Data::Enum(data) => data,
@@ -59,72 +33,162 @@ impl Routes {
                 .collect::<Result<_>>()?,
         })
     }
+
+    /// Generate the full `impl Route` for this type
+    pub fn gen_impl(&self) -> TokenStream {
+        let ident = &self.ident;
+        let path_arms = self.gen_path_arms();
+        let query_arms = self.gen_query_arms();
+        let parse_blocks = self.gen_parse_blocks();
+
+        quote! {
+            impl routetype::Route for #ident {
+                fn parse<'a, 'b>(
+                    path: impl Iterator<Item = routetype::PathSegment<'a>>,
+                    query: Option<impl Iterator<Item = routetype::QueryPair<'b>>>,
+                ) -> Option<Self> {
+                    // We should use a more efficient parsing tree approach like in Yesod
+                    let path = path.collect::<Vec<_>>();
+                    let query = routetype::QueryMap::from_iter(query);
+                    #parse_blocks
+                    None
+                }
+
+                fn path(&self) -> Vec<routetype::PathSegment> {
+                    let mut res = Vec::new();
+                    match self {
+                        #path_arms
+                    };
+                    res
+                }
+
+                fn query(&self) -> Option<Vec<routetype::QueryPair>> {
+                    let mut res = Vec::new();
+                    match self {
+                        #query_arms
+                    }
+                    if res.is_empty() {
+                        None
+                    } else {
+                        Some(res)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Generate the match arms within the `path` method implementation
+    fn gen_path_arms(&self) -> TokenStream {
+        let mut res = TokenStream::new();
+        for route in &self.routes {
+            let pattern = route.gen_pattern();
+            let path_stmts = route.path_arm_stmts();
+
+            res.append_all(quote! { #pattern => { #path_stmts } });
+        }
+        res
+    }
+
+    /// Generate the match arms within the `query` method implementation
+    fn gen_query_arms(&self) -> TokenStream {
+        let mut res = TokenStream::new();
+        for route in &self.routes {
+            let pattern = route.gen_pattern();
+            let query_stmts = route.query_arm_stmts();
+
+            res.append_all(quote! { #pattern => { #query_stmts } });
+        }
+        res
+    }
+
+    /// Generate the individual parse blocks within the `parse` method implementation
+    fn gen_parse_blocks(&self) -> TokenStream {
+        let mut res = TokenStream::new();
+        for route in &self.routes {
+            route.gen_parse_block(&mut res);
+        }
+        res
+    }
 }
 
+/// A single variant of a user defined route enum
 #[derive(Debug)]
-pub struct Route {
-    pub ident: Ident,
-    pub variant_type: VariantType,
+struct Route {
+    /// Name of the variant
+    ident: Ident,
+    /// The definition of the route
+    route_contents: RouteContents,
 }
 
 impl Route {
+    /// Parse out information on this route from the variant, including the attributes included on it.
     fn parse(variant: &syn::Variant) -> Result<Self> {
         let ident = variant.ident.clone();
         let raw_route: String = raw_route_attr(&variant.attrs).with_context(|| {
             format!("route attribute is required, missing on variant {}", ident)
         })?;
         let variant_type = match &variant.fields {
-            syn::Fields::Named(fields) => VariantType::parse_named(&raw_route, fields),
-            syn::Fields::Unnamed(fields) => VariantType::parse_positional(&raw_route, fields),
-            syn::Fields::Unit => VariantType::parse_unit(&raw_route),
+            syn::Fields::Named(fields) => RouteContents::parse_named(&raw_route, fields),
+            syn::Fields::Unnamed(fields) => RouteContents::parse_positional(&raw_route, fields),
+            syn::Fields::Unit => RouteContents::parse_unit(&raw_route),
         }
         .with_context(|| format!("Parsing fields of route variant {}", ident))?;
         Ok(Route {
             ident,
-            variant_type,
+            route_contents: variant_type,
         })
     }
 
-    pub fn gen_pattern(&self) -> TokenStream {
+    /// Generate the pattern match for this `Route`.
+    ///
+    /// This will handle the differences between unit, tuple, and field syntax and bind all fields to their derived local names.
+    fn gen_pattern(&self) -> TokenStream {
         let ident = &self.ident;
-        match &self.variant_type {
-            VariantType::Unit(_) => quote! { Self::#ident },
-            VariantType::Positional(pq) => {
+        match &self.route_contents {
+            RouteContents::Unit(_) => quote! { Self::#ident },
+            RouteContents::Positional(pq) => {
                 let patterns = pq.patterns();
                 quote! { Self::#ident(#patterns) }
             }
-            VariantType::Named(pq) => {
+            RouteContents::Named(pq) => {
                 let patterns = pq.patterns();
                 quote! { Self::#ident { #patterns } }
             }
         }
     }
 
-    pub fn path_arm_stmts(&self) -> TokenStream {
+    /// Generate the contents of the match arms of the `path` method.
+    ///
+    /// These statements will populate the `path` `Vec`.
+    fn path_arm_stmts(&self) -> TokenStream {
         let mut ts = TokenStream::new();
-        match &self.variant_type {
-            VariantType::Unit(pq) => pq.path.iter().for_each(|seg| seg.path_arm_stmts(&mut ts)),
-            VariantType::Positional(pq) => {
+        match &self.route_contents {
+            RouteContents::Unit(pq) => pq.path.iter().for_each(|seg| seg.path_arm_stmts(&mut ts)),
+            RouteContents::Positional(pq) => {
                 pq.path.iter().for_each(|seg| seg.path_arm_stmts(&mut ts))
             }
-            VariantType::Named(pq) => pq.path.iter().for_each(|seg| seg.path_arm_stmts(&mut ts)),
+            RouteContents::Named(pq) => pq.path.iter().for_each(|seg| seg.path_arm_stmts(&mut ts)),
         }
         ts
     }
 
-    pub fn query_arm_stmts(&self) -> TokenStream {
+    /// Generate the contents of the match arms of the `query` method.
+    ///
+    /// These statements will populate the `query` `Vec`.
+    fn query_arm_stmts(&self) -> TokenStream {
         let mut ts = TokenStream::new();
-        match &self.variant_type {
-            VariantType::Unit(pq) => pq.query.iter().for_each(|query| query.stmts(&mut ts)),
-            VariantType::Positional(pq) => pq.query.iter().for_each(|query| query.stmts(&mut ts)),
-            VariantType::Named(pq) => pq.query.iter().for_each(|query| query.stmts(&mut ts)),
+        match &self.route_contents {
+            RouteContents::Unit(pq) => pq.query.iter().for_each(|query| query.stmts(&mut ts)),
+            RouteContents::Positional(pq) => pq.query.iter().for_each(|query| query.stmts(&mut ts)),
+            RouteContents::Named(pq) => pq.query.iter().for_each(|query| query.stmts(&mut ts)),
         }
         ts
     }
 
+    /// Generate the contents of the `parse` method
     fn gen_parse_block(&self, res: &mut TokenStream) {
         let (parse_path, parse_query, construct_route) =
-            self.variant_type.gen_parse_pieces(&self.ident);
+            self.route_contents.gen_parse_pieces(&self.ident);
         res.append_all(quote! {
             if let Some(route) = (|| {
                 let mut path = path.iter();
@@ -139,6 +203,7 @@ impl Route {
     }
 }
 
+/// Extract the raw contents of the `#[route(...)]` attribute, if present and a string literal.
 fn raw_route_attr(attrs: &[syn::Attribute]) -> Result<String> {
     for attr in attrs {
         if attr.path.is_ident("route") {
@@ -151,6 +216,9 @@ fn raw_route_attr(attrs: &[syn::Attribute]) -> Result<String> {
     Err(anyhow!("Attribute named route not found"))
 }
 
+/// Parse out the information on the path segments.
+///
+/// This combines the path information from the `route` attr and the fields defined on the `enum`.
 fn parse_path_fields<Field: AsField>(
     raw_path: &str,
     fields: &mut Vec<&syn::Field>,
@@ -170,15 +238,16 @@ fn parse_path_fields<Field: AsField>(
         .collect()
 }
 
+/// Same as `parse_path_fields` but for the query string.
 fn parse_query_fields<Field: AsField>(
     raw_query: &str,
-    mut fields: Vec<&syn::Field>,
+    fields: &mut Vec<&syn::Field>,
 ) -> Result<Vec<Query<Field>>> {
     if raw_query.is_empty() {
         bail!("Empty query string specified, please omit the question mark");
     }
     let mut counter = 0;
-    let res: Result<_> = raw_query
+    raw_query
         .split('&')
         .map(|raw_pair| match raw_pair.find('=') {
             None => Ok(Query {
@@ -189,34 +258,45 @@ fn parse_query_fields<Field: AsField>(
                 let key = raw_pair[..idx].to_owned();
                 let value = &raw_pair[idx + 1..];
                 let value = RouteValue::parse(value, RouteValueType::Query, &mut counter)?;
-                value.remove_field(&mut fields)?;
+                value.remove_field(fields)?;
                 Ok(Query {
                     key,
                     value: Some(value),
                 })
             }
         })
-        .collect();
-    if res.is_ok() && !fields.is_empty() {
+        .collect()
+}
+
+/// Ensure that the provided fields are empty, raising a descriptive error message otherwise.
+fn require_fields_used(fields: Vec<&syn::Field>) -> Result<()> {
+    if fields.is_empty() {
+        Ok(())
+    } else {
         let mut unused = Vec::new();
         for field in &fields {
             if let Some(ident) = field.ident.as_ref() {
                 unused.push(ident.to_string());
             }
         }
-        bail!("Not all fields used: {:?}", unused);
+        Err(anyhow!("Not all fields used: {:?}", unused))
     }
-    res
 }
 
+/// The contents of a single route.
+///
+/// This supports the three ways of specifying a variant and provides some type safety by inserting a type parameter into [PathAndQuery].
 #[derive(Debug)]
-pub enum VariantType {
+enum RouteContents {
+    /// Unit variant, e.g. `enum Route { Home }`. No fields are allowed, so we use [Infallible].
     Unit(PathAndQuery<Infallible>),
+    /// Positional/tuple variant, e.g. `enum Route { Hello(String) }`. Fields are handled positionally, and we don't track that position, so we use a unit.
     Positional(PathAndQuery<()>),
+    /// Named variant, e.g. `enum Route { Hello { name: String } }`. Fields are recognized by identifier.
     Named(PathAndQuery<Ident>),
 }
 
-impl VariantType {
+impl RouteContents {
     fn parse_named(raw_route: &str, fields: &syn::FieldsNamed) -> Result<Self> {
         let fields: Vec<_> = fields.named.iter().collect();
         Ok(Self::Named(PathAndQuery::parse(raw_route, fields)?))
@@ -234,33 +314,29 @@ impl VariantType {
     /// parse the path, parse the query, construct the route
     fn gen_parse_pieces(&self, ident: &Ident) -> (TokenStream, TokenStream, TokenStream) {
         match self {
-            VariantType::Unit(pq) => pq.gen_parse_pieces(ident),
-            VariantType::Positional(pq) => pq.gen_parse_pieces(ident),
-            VariantType::Named(pq) => pq.gen_parse_pieces(ident),
+            RouteContents::Unit(pq) => pq.gen_parse_pieces(ident),
+            RouteContents::Positional(pq) => pq.gen_parse_pieces(ident),
+            RouteContents::Named(pq) => pq.gen_parse_pieces(ident),
         }
     }
 }
 
+/// The true contents of a single route, parameterized on `Field`.
+///
+/// See both [RouteContents] and [AsField] for the purpose of this type parameter.
 #[derive(Debug)]
-pub struct PathAndQuery<Field> {
-    pub path: Vec<Seg<Field>>,
-    pub query: Vec<Query<Field>>,
+struct PathAndQuery<Field: AsField> {
+    path: Vec<Seg<Field>>,
+    query: Vec<Query<Field>>,
 }
 
 impl<Field: AsField> PathAndQuery<Field> {
+    /// Parse the complete [PathAndQuery] based on the given route attribute and fields for the variant.
     fn parse(raw_route: &str, mut fields: Vec<&syn::Field>) -> Result<Self> {
         Ok(match raw_route.find('?') {
             None => {
                 let path = parse_path_fields(raw_route, &mut fields)?;
-                if !fields.is_empty() {
-                    use quote::ToTokens;
-                    let mut ts = proc_macro2::TokenStream::new();
-                    fields.iter().for_each(|f| f.to_tokens(&mut ts));
-                    bail!(
-                        "route attribute does not specify all fields in path-only attribute {:?}",
-                        ts
-                    );
-                }
+                require_fields_used(fields)?;
                 PathAndQuery {
                     path,
                     query: vec![],
@@ -270,12 +346,16 @@ impl<Field: AsField> PathAndQuery<Field> {
                 let raw_path = &raw_route[..idx];
                 let raw_query = &raw_route[idx + 1..];
                 let path = parse_path_fields(raw_path, &mut fields)?;
-                let query = parse_query_fields(raw_query, fields)?;
+                let query = parse_query_fields(raw_query, &mut fields)?;
+                require_fields_used(fields)?;
                 PathAndQuery { path, query }
             }
         })
     }
 
+    /// Generate the comma-separated contents of a pattern match for this route.
+    ///
+    /// Note that tuple and record variants will need to wrap this up with parens or braces, respectively.
     fn patterns(&self) -> TokenStream {
         let mut res = TokenStream::new();
         self.path.iter().for_each(|seg| seg.gen_pattern(&mut res));
@@ -309,12 +389,16 @@ impl<Field: AsField> PathAndQuery<Field> {
     }
 }
 
+/// A single value within either a path segment or a query string parameter
 #[derive(Debug)]
-pub enum RouteValue<Field> {
+enum RouteValue<Field> {
+    /// Literal value, e.g. `/hello/` or `?foo=bar`.
     Literal(String),
+    /// Field, e.g. `/hello/{name}` or `?page={}`
     Field { field: Field, local: Ident },
 }
 
+/// Where a route value comes from, used for nicer error messages and generated identifiers.
 #[derive(Clone, Copy)]
 enum RouteValueType {
     Path,
@@ -322,6 +406,7 @@ enum RouteValueType {
 }
 
 impl RouteValueType {
+    /// Generate the next anonymous identifier
     fn next_ident(&self, counter: &mut usize) -> Ident {
         *counter += 1;
         format_ident!(
@@ -335,6 +420,7 @@ impl RouteValueType {
     }
 }
 
+/// Raw parse of a path segment or query string value
 enum RouteValueRaw {
     Literal(String),
     Positional,
@@ -359,14 +445,33 @@ impl FromStr for RouteValueRaw {
     }
 }
 
-pub trait AsField: Sized {
+/// Types which can be treated as parameterized fields in a route.
+///
+/// This generalization allows us to handle unit, tuple, and named field variants in a type safe way. The alternative would be to use tricks like `Option<Ident>` and runtime checking.
+///
+/// Instead, we have runtime guarantees that, if you have an `Infallible`, it _must_ be part of a unit variant. Similarly, `()` is always positional, and `Ident` is always named fields.
+///
+/// See [PathAndQuery] for more information.
+trait AsField: Sized {
+    /// Produce a value from a positional field, if allowed.
     fn from_positional() -> Result<Self>;
+
+    /// Produce a value from a named field, if allowed.
     fn from_named(ident: Ident) -> Result<Self>;
 
+    /// Generate the necessary construction code for this one field
     fn construct(&self, local: &Ident, ts: &mut TokenStream);
+
+    /// Generate pattern matching for this one field
     fn gen_pattern(&self, local: &Ident, ts: &mut TokenStream);
 
+    /// Wrap up all of the constructed fields with appropriate wrapping for the given [Ident].
     fn wrap_construct(ident: &Ident, contents: &TokenStream) -> TokenStream;
+}
+
+/// Demonstrate the fact that some code can never be called.
+fn absurd<T>(_: Infallible) -> T {
+    unreachable!()
 }
 
 impl AsField for Infallible {
@@ -379,7 +484,7 @@ impl AsField for Infallible {
     }
 
     fn construct(&self, _local: &Ident, _ts: &mut TokenStream) {
-        panic!("Impossible! construct called on Infallible");
+        absurd(*self)
     }
 
     fn wrap_construct(ident: &Ident, contents: &TokenStream) -> TokenStream {
@@ -388,7 +493,7 @@ impl AsField for Infallible {
     }
 
     fn gen_pattern(&self, _local: &Ident, _ts: &mut TokenStream) {
-        panic!("Impossible! gen_pattern called on Infallible");
+        absurd(*self)
     }
 }
 
@@ -437,6 +542,7 @@ impl AsField for Ident {
 }
 
 impl<Field: AsField> RouteValue<Field> {
+    /// Parse a single route value from the given attribute contents.
     fn parse(raw: &str, typ: RouteValueType, counter: &mut usize) -> Result<Self> {
         let raw: RouteValueRaw = raw.parse()?;
         let field: Field = match raw {
@@ -448,6 +554,7 @@ impl<Field: AsField> RouteValue<Field> {
         Ok(RouteValue::Field { field, local })
     }
 
+    /// Remove this [RouteValue] from the fields, so that we can later detect missing fields.
     fn remove_field(&self, fields: &mut Vec<&syn::Field>) -> Result<()> {
         match self {
             RouteValue::Literal(_) => Ok(()),
@@ -463,10 +570,12 @@ impl<Field: AsField> RouteValue<Field> {
     }
 }
 
+/// A single segment of the path
 #[derive(Debug)]
-pub struct Seg<Field>(RouteValue<Field>);
+struct Seg<Field>(RouteValue<Field>);
 
 impl<Field: AsField> Seg<Field> {
+    /// Generate a statement for the `path` method to push this value
     fn path_arm_stmts(&self, ts: &mut TokenStream) {
         match &self.0 {
             RouteValue::Literal(s) => ts.append_all(quote! {
@@ -478,6 +587,7 @@ impl<Field: AsField> Seg<Field> {
         }
     }
 
+    /// Generate a part of a pattern match for this field, if it's not a literal
     fn gen_pattern(&self, ts: &mut TokenStream) {
         match &self.0 {
             RouteValue::Literal(_) => (),
@@ -485,6 +595,7 @@ impl<Field: AsField> Seg<Field> {
         }
     }
 
+    /// Generate parse code for this segmentj
     fn gen_parse(&self, ts: &mut TokenStream) {
         ts.append_all(match &self.0 {
             RouteValue::Literal(s) => {
@@ -500,6 +611,7 @@ impl<Field: AsField> Seg<Field> {
         })
     }
 
+    /// Call [AsField::construct] if not a literal.
     fn construct(&self, ts: &mut TokenStream) {
         match &self.0 {
             RouteValue::Literal(_) => (),
@@ -508,13 +620,17 @@ impl<Field: AsField> Seg<Field> {
     }
 }
 
+/// A single query string pair.
 #[derive(Debug)]
-pub struct Query<Field> {
-    pub key: String,
-    pub value: Option<RouteValue<Field>>,
+struct Query<Field> {
+    /// The key, always a literal string
+    key: String,
+    /// Value, [None] represents lack of a `=`
+    value: Option<RouteValue<Field>>,
 }
 
 impl<Field: AsField> Query<Field> {
+    /// Generate the statement for the `query` method.
     fn stmts(&self, ts: &mut TokenStream) {
         let key = &self.key;
         ts.append_all(match &self.value {
@@ -530,6 +646,7 @@ impl<Field: AsField> Query<Field> {
         })
     }
 
+    /// Generate the statement for the `parse` method.
     fn gen_parse(&self, ts: &mut TokenStream) {
         let key = &self.key;
         ts.append_all(match &self.value {
@@ -545,6 +662,7 @@ impl<Field: AsField> Query<Field> {
         });
     }
 
+    /// Generate the pattern match if a non-literal and non-`None`.
     fn gen_pattern(&self, ts: &mut TokenStream) {
         match &self.value {
             None => (),
@@ -553,6 +671,7 @@ impl<Field: AsField> Query<Field> {
         }
     }
 
+    /// Generate the construction of this field if a non-literal and non-`None`.
     fn construct(&self, ts: &mut TokenStream) {
         match &self.value {
             None => (),
