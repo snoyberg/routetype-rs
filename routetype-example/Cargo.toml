@@ -1,0 +1,10 @@
+[package]
+name = "routetype-example"
+version = "0.1.0"
+authors = ["Michael Snoyman <michael@snoyman.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+routetype = { path = "../routetype" }

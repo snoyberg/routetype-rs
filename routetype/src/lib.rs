@@ -95,6 +95,7 @@ impl RoutePiece for i32 {
 }
 
 /// A simplified view of query string parameters.
+#[derive(Debug)]
 pub struct QueryMap<'a> {
     map: HashMap<Cow<'a, str>, (usize, Vec<Cow<'a, str>>)>,
 }
