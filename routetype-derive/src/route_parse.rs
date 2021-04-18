@@ -98,41 +98,6 @@ impl Route {
                 quote! { Self::#ident { #patterns } }
             }
         }
-        /*
-        match self.variant_type {
-            VariantType::Tuple => {
-                let mut fields= TokenStream::new();
-                for seg in &self.segs {
-                    match &seg.0 {
-                        RouteValue::Literal(_) => (),
-                        RouteValue::Field { field, local } => {
-                            assert!(field.is_none());
-                            fields.append_all(quote! { #local, });
-                        },
-                    }
-                }
-                for query in &self.query {
-                    match &query.value {
-                        None => (),
-                        Some(RouteValue::Literal(_)) => (),
-                        Some(RouteValue::Field { field, local }) => {
-                            assert!(field.is_none());
-                            fields.append_all(quote! { #local, });
-                            /*
-                            let field = field.as_ref().expect("Named/unnamed logic mismatch");
-                            fields.append_all( quote! { #field: #local });
-                            */
-                        }
-                    }
-                }
-                quote!{ Self::#ident(#fields) }
-            }
-            VariantType::Named => {
-                let mut fields= TokenStream::new();
-                quote!{ Self::#ident { #fields }}
-            }
-        }
-        */
     }
 
     pub fn path_arm_stmts(&self) -> TokenStream {
@@ -497,31 +462,6 @@ impl<Field: AsField> RouteValue<Field> {
         }
     }
 }
-
-/*
-impl RouteValue<Ident> {
-    fn remove_field(&self, fields: &mut Vec<&syn::Field>) -> Result<()> {
-        match self {
-            RouteValue::Literal(_) => Ok(()),
-            RouteValue::Field { field: ident, .. } => {
-                for idx in 0..fields.len() {
-                    let field = &fields[idx];
-                    if field
-                        .ident
-                        .as_ref()
-                        .context("Used named route values on positional variant")?
-                        == ident
-                    {
-                        fields.remove(idx);
-                        return Ok(());
-                    }
-                }
-                Err(anyhow!("Field named {} not found", ident))
-            }
-        }
-    }
-}
-*/
 
 #[derive(Debug)]
 pub struct Seg<Field>(RouteValue<Field>);
