@@ -3,4 +3,5 @@ members = [
     "routetype",
     "routetype-derive",
     "routetype-example",
+    "routetype-warp",
 ]

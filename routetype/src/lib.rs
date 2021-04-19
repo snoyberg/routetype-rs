@@ -43,6 +43,20 @@ pub trait Route: Sized + Clone + Send + Sync + 'static {
         Self::parse(path, query)
     }
 
+    /// Like [Self::parse_str], but takes the path and query string as separate strings.
+    ///
+    /// This method will automatically strip a leading question mark from the query string, if present.
+    fn parse_strs(path: &str, query: &str) -> Option<Self> {
+        let path = parse_path(path);
+        let query = if query.is_empty() {
+            let query = query.strip_prefix('?').unwrap_or(query);
+            Some(parse_query(query))
+        } else {
+            None
+        };
+        Self::parse(path, query)
+    }
+
     /// Helper function that renders this value into a `String`.
     ///
     /// For details on the exact output format, see [render_path_and_query].

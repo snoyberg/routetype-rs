@@ -8,3 +8,6 @@ edition = "2018"
 
 [dependencies]
 routetype = { path = "../routetype" }
+routetype-warp = { path = "../routetype-warp" }
+warp = "0.3"
+tokio = { version = "1", features = ["full"] }
