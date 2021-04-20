@@ -1,6 +1,6 @@
+use askama::Template;
 use routetype_hyper::*;
 use std::sync::atomic::AtomicUsize;
-use askama::Template;
 #[derive(Route, Clone, PartialEq, Debug)]
 enum MyRoute {
     #[route("/")]
@@ -28,13 +28,19 @@ impl From<&str> for Greet {
     fn from(name: &str) -> Self {
         Greet {
             name: name.to_owned(),
-            route: MyRoute::Hello { name: name.to_owned() }.render(),
+            route: MyRoute::Hello {
+                name: name.to_owned(),
+            }
+            .render(),
         }
     }
 }
 
 async fn get_home(input: DispatchInput<MyApp>) -> Result<DispatchOutput> {
-    let counter = input.app.counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    let counter = input
+        .app
+        .counter
+        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     let style_css = MyRoute::Style.render(); // FIXME use a OnceCell
     let greetings = vec![
         "Alice".into(),
@@ -42,9 +48,12 @@ async fn get_home(input: DispatchInput<MyApp>) -> Result<DispatchOutput> {
         "Charlie".into(),
         "<super dangerous>".into(),
     ];
-    respond::askama(HomeTemplate { counter, style_css, greetings })
+    respond::askama(HomeTemplate {
+        counter,
+        style_css,
+        greetings,
+    })
 }
-
 
 #[derive(Default)]
 struct MyApp {
@@ -81,11 +90,13 @@ async fn get_hello(_input: DispatchInput<MyApp>, name: String) -> Result<Dispatc
         name,
         home: MyRoute::Home.render(),
         style_css: MyRoute::Style.render(),
-
     })
 }
 
 #[tokio::main]
 async fn main() {
-    MyApp::default().into_server().run(([127, 0, 0, 1], 3000)).await;
+    MyApp::default()
+        .into_server()
+        .run(([127, 0, 0, 1], 3000))
+        .await;
 }

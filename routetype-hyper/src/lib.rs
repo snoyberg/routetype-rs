@@ -1,8 +1,12 @@
-use hyper::{Body, Request, Response, server::conn::AddrStream, service::{make_service_fn, service_fn}};
+pub use anyhow::*;
+pub use async_trait::async_trait;
+use hyper::{
+    server::conn::AddrStream,
+    service::{make_service_fn, service_fn},
+    Body, Request, Response,
+};
 pub use routetype::*;
 use std::{convert::Infallible, net::SocketAddr, sync::Arc};
-pub use async_trait::async_trait;
-pub use anyhow::*;
 
 pub mod respond;
 
@@ -65,8 +69,18 @@ async fn helper<T: Dispatch>(
     app: Arc<T>,
     request: Request<Body>,
 ) -> Result<Response<Body>, Infallible> {
-    let route = T::Route::parse_str(request.uri().path_and_query().expect("path_and_query cannot be None").as_str());
-    let input = DispatchInput { app, request, remote };
+    let route = T::Route::parse_str(
+        request
+            .uri()
+            .path_and_query()
+            .expect("path_and_query cannot be None")
+            .as_str(),
+    );
+    let input = DispatchInput {
+        app,
+        request,
+        remote,
+    };
     let output = match route {
         Err(RouteError::NoMatch) => T::not_found(input).await,
         Err(RouteError::NormalizationFailed(dest)) => respond::redirect::temporary(dest),
