@@ -1,0 +1,9 @@
+[package]
+name = "routetype-hyper"
+version = "0.1.0"
+authors = ["Michael Snoyman <michael@snoyman.com>"]
+edition = "2018"
+
+[dependencies]
+routetype = { path = "../routetype" }
+hyper = { version = "0.14", features = ["server"] }
