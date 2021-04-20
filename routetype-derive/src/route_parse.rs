@@ -49,7 +49,7 @@ impl Routes {
                 ) -> Option<Self> {
                     // We should use a more efficient parsing tree approach like in Yesod
                     let path = path.collect::<Vec<_>>();
-                    let query = routetype::QueryMap::from_iter(query);
+                    let query = routetype::QueryMap::from_query_iter(query);
                     #parse_blocks
                     None
                 }

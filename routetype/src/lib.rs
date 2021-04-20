@@ -132,7 +132,7 @@ pub struct QueryMap<'a> {
 }
 
 impl<'a> QueryMap<'a> {
-    pub fn from_iter(query: Option<impl Iterator<Item = QueryPair<'a>>>) -> Self {
+    pub fn from_query_iter(query: Option<impl Iterator<Item = QueryPair<'a>>>) -> Self {
         let mut map = HashMap::new();
         let query = match query {
             None => return QueryMap { map },
