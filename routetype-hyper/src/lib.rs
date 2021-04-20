@@ -1,12 +1,18 @@
 pub use anyhow::*;
 pub use async_trait::async_trait;
+pub use hyper::{
+    header::{HeaderName, HeaderValue},
+    Body, Request, Response, StatusCode,
+};
 use hyper::{
     server::conn::AddrStream,
     service::{make_service_fn, service_fn},
-    Body, Request, Response,
 };
 pub use routetype::*;
 use std::{convert::Infallible, net::SocketAddr, sync::Arc};
+
+#[cfg(feature = "askama")]
+pub use askama::Template;
 
 pub mod respond;
 
@@ -20,10 +26,10 @@ pub struct DispatchInput<D: Dispatch> {
 pub trait Dispatch: Sized + Send + Sync + 'static {
     type Route: Route;
 
-    async fn dispatch(input: DispatchInput<Self>, route: Self::Route) -> Result<DispatchOutput>;
+    async fn dispatch(input: DispatchInput<Self>, route: Self::Route) -> Result<Response<Body>>;
 
-    async fn not_found(input: DispatchInput<Self>) -> Result<DispatchOutput> {
-        default_not_found(input).await
+    async fn not_found(_input: DispatchInput<Self>) -> Result<Response<Body>> {
+        Ok(default_not_found())
     }
 
     fn into_server(self) -> DispatchServer<Self> {
@@ -31,15 +37,23 @@ pub trait Dispatch: Sized + Send + Sync + 'static {
     }
 }
 
-pub async fn default_not_found<T: Dispatch>(_input: DispatchInput<T>) -> Result<DispatchOutput> {
-    Ok(respond::html("<h1>File not found</h1>"))
+pub fn default_not_found() -> Response<Body> {
+    respond::html("<h1>File not found</h1>")
 }
 
-pub struct DispatchOutput(pub hyper::Response<hyper::Body>);
+pub trait DispatchOutput: Sized {
+    fn into_response(self) -> Result<Response<Body>>;
+}
 
-impl<B: Into<hyper::Body>> From<hyper::Response<B>> for DispatchOutput {
-    fn from(res: hyper::Response<B>) -> Self {
-        DispatchOutput(res.map(|b| b.into()))
+impl<B: Into<hyper::Body>> DispatchOutput for hyper::Response<B> {
+    fn into_response(self) -> Result<Response<Body>> {
+        Ok(self.map(|b| b.into()))
+    }
+}
+
+impl<B: Into<hyper::Body>> DispatchOutput for Result<hyper::Response<B>> {
+    fn into_response(self) -> Result<Response<Body>> {
+        self.map(|res| res.map(|b| b.into()))
     }
 }
 
@@ -87,9 +101,9 @@ async fn helper<T: Dispatch>(
         Ok(route) => T::dispatch(input, route).await,
     };
     let res = match output {
-        Ok(DispatchOutput(res)) => res,
+        Ok(res) => res,
         Err(e) => {
-            let mut res = respond::html(e.to_string()).0;
+            let mut res = respond::html(e.to_string());
             *res.status_mut() = hyper::StatusCode::INTERNAL_SERVER_ERROR;
             res
         }

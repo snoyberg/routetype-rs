@@ -1,6 +1,6 @@
-use askama::Template;
 use routetype_hyper::*;
 use std::sync::atomic::AtomicUsize;
+
 #[derive(Route, Clone, PartialEq, Debug)]
 enum MyRoute {
     #[route("/")]
@@ -36,7 +36,7 @@ impl From<&str> for Greet {
     }
 }
 
-async fn get_home(input: DispatchInput<MyApp>) -> Result<DispatchOutput> {
+async fn get_home(input: DispatchInput<MyApp>) -> Result<Response<Body>> {
     let counter = input
         .app
         .counter
@@ -64,16 +64,16 @@ struct MyApp {
 impl Dispatch for MyApp {
     type Route = MyRoute;
 
-    async fn dispatch(input: DispatchInput<Self>, route: Self::Route) -> Result<DispatchOutput> {
+    async fn dispatch(input: DispatchInput<Self>, route: Self::Route) -> Result<Response<Body>> {
         match route {
-            MyRoute::Home => get_home(input).await, // FIXME std::convert::TryFrom::try_from(get_home(input).await),
-            MyRoute::Style => Ok(get_style(input).await), // std::convert::TryFrom::try_from(get_style(input).await),
-            MyRoute::Hello { name } => get_hello(input, name).await, // std::convert::TryFrom::try_from(get_hello(input, name).await),
+            MyRoute::Home => DispatchOutput::into_response(get_home(input).await),
+            MyRoute::Style => DispatchOutput::into_response(get_style(input).await),
+            MyRoute::Hello { name } => DispatchOutput::into_response(get_hello(input, name).await),
         }
     }
 }
 
-async fn get_style(_input: DispatchInput<MyApp>) -> DispatchOutput {
+async fn get_style(_input: DispatchInput<MyApp>) -> Response<Body> {
     respond::css("h1 { color: red }")
 }
 
@@ -85,7 +85,7 @@ struct HelloTemplate {
     style_css: String,
 }
 
-async fn get_hello(_input: DispatchInput<MyApp>, name: String) -> Result<DispatchOutput> {
+async fn get_hello(_input: DispatchInput<MyApp>, name: String) -> Result<Response<Body>> {
     respond::askama(HelloTemplate {
         name,
         home: MyRoute::Home.render(),
