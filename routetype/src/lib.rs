@@ -2,6 +2,9 @@ mod either;
 /// Helper functions for parsing the raw strings received over the wire.
 pub mod raw;
 
+/// Route normalize, to ensure consistent and canonical representations.
+pub mod normalize;
+
 pub use routetype_derive::*;
 use std::{borrow::Cow, collections::HashMap};
 
@@ -21,15 +24,29 @@ pub type PathSegment<'a> = Cow<'a, str>;
 /// For more details, see [raw::parse_query].
 pub type QueryPair<'a> = (Cow<'a, str>, Option<Cow<'a, str>>);
 
+/// Why parsing the route failed
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RouteError {
+    /// The route failed the normalization rules specified.
+    ///
+    /// Provides a modified rendered route to redirect to.
+    NormalizationFailed(String),
+
+    /// The route was normalized but did not match
+    NoMatch,
+}
+
 /// A type which can be parsed from and rendered to an HTTP path and query string.
 pub trait Route: Sized + Clone + Send + Sync + 'static {
     /// Attempt to parse from the given path segments and query pairs.
     fn parse<'a, 'b>(
         path: impl Iterator<Item = PathSegment<'a>>,
         query: Option<impl Iterator<Item = QueryPair<'b>>>,
-    ) -> Option<Self>;
+    ) -> Result<Self, RouteError>;
 
     /// Produce a `Vec` with the path segments.
+    ///
+    /// Note that the output from this is assumed to be normalized.
     fn path(&self) -> Vec<PathSegment>;
 
     /// Produce a `Vec` with the query string pairs.
@@ -38,7 +55,7 @@ pub trait Route: Sized + Clone + Send + Sync + 'static {
     /// Helper function that parses from a string instead of iterators.
     ///
     /// For details on the parsing of the underlying string, see [parse_path_and_query].
-    fn parse_str(path_and_query: &str) -> Option<Self> {
+    fn parse_str(path_and_query: &str) -> Result<Self, RouteError> {
         let (path, query) = parse_path_and_query(path_and_query);
         Self::parse(path, query)
     }
@@ -46,7 +63,7 @@ pub trait Route: Sized + Clone + Send + Sync + 'static {
     /// Like [Self::parse_str], but takes the path and query string as separate strings.
     ///
     /// This method will automatically strip a leading question mark from the query string, if present.
-    fn parse_strs(path: &str, query: &str) -> Option<Self> {
+    fn parse_strs(path: &str, query: &str) -> Result<Self, RouteError> {
         let path = parse_path(path);
         let query = if query.is_empty() {
             let query = query.strip_prefix('?').unwrap_or(query);
@@ -173,9 +190,12 @@ impl Route for PlainRoute {
     fn parse<'a, 'b>(
         path: impl Iterator<Item = PathSegment<'a>>,
         query: Option<impl Iterator<Item = QueryPair<'b>>>,
-    ) -> Option<Self> {
-        Some(PlainRoute {
-            path: path.map(Cow::into_owned).collect(),
+    ) -> Result<Self, RouteError> {
+        let (path, query) = normalize::Normalization::default()
+            .normalize_parse(path, query)
+            .map_err(RouteError::NormalizationFailed)?;
+        Ok(PlainRoute {
+            path: path.into_iter().map(Cow::into_owned).collect(),
             query: query.map(|q| {
                 q.map(|(k, v)| (k.into_owned(), v.map(Cow::into_owned)))
                     .collect()
@@ -184,10 +204,12 @@ impl Route for PlainRoute {
     }
 
     fn path(&self) -> Vec<PathSegment> {
-        self.path
-            .iter()
-            .map(|s| Cow::Borrowed(s.as_str()))
-            .collect()
+        normalize::Normalization::default().normalize_render_path(
+            self.path
+                .iter()
+                .map(|s| Cow::Borrowed(s.as_str()))
+                .collect(),
+        )
     }
 
     fn query(&self) -> Option<Vec<QueryPair>> {
@@ -305,5 +327,23 @@ mod tests {
         assert_eq!(rendered, "/?=%2500");
         let parsed: PlainRoute = PlainRoute::parse_str(&rendered).unwrap();
         assert_eq!(plainroute, parsed);
+    }
+
+    #[test]
+    fn double_slash() {
+        let parsed = PlainRoute::parse_str("/foo//bar");
+        assert_eq!(
+            parsed,
+            Err(RouteError::NormalizationFailed("/foo/bar".to_owned()))
+        )
+    }
+
+    #[test]
+    fn trailing_slash() {
+        let parsed = PlainRoute::parse_str("/foo/bar/");
+        assert_eq!(
+            parsed,
+            Err(RouteError::NormalizationFailed("/foo/bar".to_owned()))
+        )
     }
 }

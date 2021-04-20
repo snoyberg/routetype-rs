@@ -35,16 +35,6 @@ fn decode(s: &str) -> Cow<str> {
     percent_encoding::percent_decode_str(s).decode_utf8_lossy()
 }
 
-fn decode_path(s: &str) -> Cow<str> {
-    if s.contains(|c| c != '-') {
-        decode(s)
-    } else if s.is_empty() {
-        Cow::Borrowed("")
-    } else {
-        Cow::Borrowed(&s[1..])
-    }
-}
-
 /** Parse just the path portion (i.e., everything before the question mark).
 
 This function will accept and ignore a leading forward slash.
@@ -64,16 +54,6 @@ Trailing slashes and repeated slashes produce empty segments:
 let segments: Vec<PathSegment> = parse_path("foo//bar/").collect();
 assert_eq!(segments, vec!["foo", "", "bar", ""]);
 ```
-
-In order to properly handle intentionally empty path segments,
-this function will strip the leading dash off of any dash-only segments.
-
-```rust
-# use routetype::raw::parse_path;
-# use routetype::PathSegment;
-let segments: Vec<PathSegment> = parse_path("/-/bar/---").collect();
-assert_eq!(segments, vec!["", "bar", "--"]);
-```
 */
 pub fn parse_path(mut path: &str) -> impl Iterator<Item = PathSegment> {
     if path.bytes().next() == Some(b'/') {
@@ -82,7 +62,7 @@ pub fn parse_path(mut path: &str) -> impl Iterator<Item = PathSegment> {
     if path.is_empty() {
         Either::Left(std::iter::empty())
     } else {
-        Either::Right(path.split('/').map(decode_path))
+        Either::Right(path.split('/').map(decode))
     }
 }
 
@@ -146,15 +126,11 @@ let path: Vec<&str> = vec![];
 let query: Option<std::iter::Empty<_>> = None;
 assert_eq!(render_path_and_query(path.iter().copied(), query), "/");
 
-// Special case: intentional empty segments are rendered as single dashes
+// Special case: unfortunately a single empty segment is identical
+// to no segments. Normalization is useful for this case.
 let path: Vec<&str> = vec![""];
 let query: Option<std::iter::Empty<_>> = None;
-assert_eq!(render_path_and_query(path.iter().copied(), query), "/-");
-
-// Similarly, "only dashes" need to be escaped too.
-let path: Vec<&str> = vec!["--"];
-let query: Option<std::iter::Empty<_>> = None;
-assert_eq!(render_path_and_query(path.iter().copied(), query), "/---");
+assert_eq!(render_path_and_query(path.iter().copied(), query), "/");
 
 let path: Vec<&str> = vec!["hello", "world"];
 let query: Option<std::iter::Empty<_>> = None;
@@ -215,17 +191,6 @@ where
         }
     }
 
-    fn encode_append_path(res: &mut String, s: &str) {
-        // Special handling to deal with dash-only segments.
-        if s.contains(|c| c != '-') {
-            // won't match empty strings, which is what we want
-            encode_append(res, s, &PATH_SET);
-        } else {
-            res.push('-');
-            *res += s;
-        }
-    }
-
     // https://url.spec.whatwg.org/#query-percent-encode-set
     const BASE: AsciiSet = CONTROLS
         .add(b'%')
@@ -240,7 +205,7 @@ where
     let mut res = String::new();
     for segment in path {
         res.push('/');
-        encode_append_path(&mut res, segment);
+        encode_append(&mut res, segment, &PATH_SET);
     }
     if res.is_empty() {
         res.push('/');
@@ -294,8 +259,9 @@ mod tests {
 
     #[test]
     fn path_dashes() {
-        assert_eq!(pq("/-"), (vec!["".to_owned()], None));
-        assert_eq!(pq("/----"), (vec!["---".to_owned()], None));
+        // no normalization occurs here
+        assert_eq!(pq("/-"), (vec!["-".to_owned()], None));
+        assert_eq!(pq("/----"), (vec!["----".to_owned()], None));
     }
 
     #[test]

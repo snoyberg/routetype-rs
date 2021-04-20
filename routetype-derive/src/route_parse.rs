@@ -46,12 +46,13 @@ impl Routes {
                 fn parse<'a, 'b>(
                     path: impl Iterator<Item = routetype::PathSegment<'a>>,
                     query: Option<impl Iterator<Item = routetype::QueryPair<'b>>>,
-                ) -> Option<Self> {
+                ) -> Result<Self, routetype::RouteError> {
                     // We should use a more efficient parsing tree approach like in Yesod
-                    let path = path.collect::<Vec<_>>();
+                    let (path, query) = routetype::normalize::Normalization::default().normalize_parse(path, query)
+                        .map_err(routetype::RouteError::NormalizationFailed)?;
                     let query = routetype::QueryMap::from_query_iter(query);
                     #parse_blocks
-                    None
+                    Err(routetype::RouteError::NoMatch)
                 }
 
                 fn path(&self) -> Vec<routetype::PathSegment> {
@@ -59,7 +60,7 @@ impl Routes {
                     match self {
                         #path_arms
                     };
-                    res
+                    routetype::normalize::Normalization::default().normalize_render_path(res)
                 }
 
                 fn query(&self) -> Option<Vec<routetype::QueryPair>> {
@@ -197,7 +198,7 @@ impl Route {
                 #parse_query
                 Some(#construct_route)
             })() {
-                return Some(route);
+                return Ok(route);
             }
         })
     }

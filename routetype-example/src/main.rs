@@ -36,12 +36,19 @@ async fn get_hello(name: String) -> impl Reply {
 
 #[tokio::main]
 async fn main() {
-    let app = route_filter().and_then(|route| async move {
+    let app = route_filter_result().and_then(|route| async move {
         // This could be automatically derived in theory
         Ok::<_, Infallible>(match route {
-            MyRoute::Home => get_home().await.into_response(),
-            MyRoute::Style => get_style().await.into_response(),
-            MyRoute::Hello { name } => get_hello(name).await.into_response(),
+            Ok(MyRoute::Home) => get_home().await.into_response(),
+            Ok(MyRoute::Style) => get_style().await.into_response(),
+            Ok(MyRoute::Hello { name }) => get_hello(name).await.into_response(),
+            Err(RouteError::NoMatch) => default_not_found().into_response(),
+            Err(RouteError::NormalizationFailed(dest)) => {
+                let uri: warp::http::Uri = dest
+                    .parse()
+                    .expect("Normalization failure contained invalid URI");
+                warp::redirect::permanent(uri).into_response()
+            }
         })
     });
     serve(app).run(([127, 0, 0, 1], 3000)).await;

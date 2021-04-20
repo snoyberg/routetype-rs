@@ -43,27 +43,33 @@ fn render_hello() {
 
 #[test]
 fn parse_style() {
-    assert_eq!(MyRoute::parse_str("/style.css?foo"), Some(MyRoute::Style));
+    assert_eq!(MyRoute::parse_str("/style.css?foo"), Ok(MyRoute::Style));
 }
 
 #[test]
 fn parse_hello() {
     assert_eq!(
         MyRoute::parse_str("/hello/alice"),
-        Some(MyRoute::Hello {
+        Ok(MyRoute::Hello {
             name: "alice".to_owned()
         })
     );
-    assert_eq!(MyRoute::parse_str("/hello/alice/"), None);
+    assert_eq!(
+        MyRoute::parse_str("/hello/alice/"),
+        Err(RouteError::NormalizationFailed("/hello/alice".to_owned()))
+    );
 }
 
 #[test]
 fn foo() {
     assert_eq!(
         MyRoute::parse_str("foo?bar=42"),
-        Some(MyRoute::Foo { bar: 42 })
+        Ok(MyRoute::Foo { bar: 42 })
     );
-    assert_eq!(MyRoute::parse_str("foo?bar=fortytwo"), None);
+    assert_eq!(
+        MyRoute::parse_str("foo?bar=fortytwo"),
+        Err(RouteError::NoMatch)
+    );
     assert_eq!("/foo?bar=42", MyRoute::Foo { bar: 42 }.render());
 
     match MyRoute::parse_str("foo?bar=42").unwrap() {
@@ -74,5 +80,25 @@ fn foo() {
 
 #[test]
 fn parse_invalid() {
-    assert_eq!(MyRoute::parse_str("/does/not/exist"), None);
+    assert_eq!(
+        MyRoute::parse_str("/does/not/exist"),
+        Err(RouteError::NoMatch)
+    );
+}
+
+#[test]
+fn parse_normalize() {
+    assert_eq!(
+        MyRoute::parse_str("//foo/bar//baz///bin/"),
+        Err(RouteError::NormalizationFailed(
+            "/foo/bar/baz/bin".to_owned()
+        ))
+    );
+    assert_eq!(
+        MyRoute::Hello {
+            name: "".to_owned()
+        }
+        .render(),
+        "/hello/-"
+    );
 }
