@@ -221,7 +221,9 @@ mod tests {
     /// This is basically a hack to handle the weird corner case of `[("", None)]`, which looks identical to no query string.
     ///
     /// Arguably we could use the same all-dashes hack as with path segments, but that will probably cause problems.
-    fn remove_unsupported_query(query: Vec<(String, Option<String>)>) -> Vec<(String, Option<String>)> {
+    fn remove_unsupported_query(
+        query: Vec<(String, Option<String>)>,
+    ) -> Vec<(String, Option<String>)> {
         if query.len() == 1 && query[0].0.is_empty() && query[0].1.is_none() {
             vec![]
         } else {

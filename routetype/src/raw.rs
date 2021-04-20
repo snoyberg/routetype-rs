@@ -217,7 +217,8 @@ where
 
     fn encode_append_path(res: &mut String, s: &str) {
         // Special handling to deal with dash-only segments.
-        if s.contains(|c| c != '-') { // won't match empty strings, which is what we want
+        if s.contains(|c| c != '-') {
+            // won't match empty strings, which is what we want
             encode_append(res, s, &PATH_SET);
         } else {
             res.push('-');

@@ -1,17 +1,23 @@
-pub use routetype::Route;
-pub use warp::{Filter, serve, Reply};
 pub use async_trait::async_trait;
+pub use routetype::Route;
 use std::{convert::Infallible, sync::Arc};
+pub use warp::{serve, Filter, Reply};
 
-pub fn route_filter<R: Route>() -> impl Filter<Error = warp::Rejection, Extract = (R,)> + Clone + Send + Sync + 'static {
-    route_filter_option().and_then(|r: Option<R>| async move {
-        r.ok_or_else(warp::reject::reject)
-    })
+pub fn route_filter<R: Route>(
+) -> impl Filter<Error = warp::Rejection, Extract = (R,)> + Clone + Send + Sync + 'static {
+    route_filter_option().and_then(|r: Option<R>| async move { r.ok_or_else(warp::reject::reject) })
 }
 
-pub fn route_filter_option<R: Route>() -> impl Filter<Error = std::convert::Infallible, Extract = (Option<R>,)> + Clone + Send + Sync + 'static {
-    use warp::filters::{path::{full, FullPath}, query::raw};
-    let both = raw().and(full()).map(|query: String, path: FullPath| R::parse_strs(path.as_str(), &query));
+pub fn route_filter_option<R: Route>(
+) -> impl Filter<Error = std::convert::Infallible, Extract = (Option<R>,)> + Clone + Send + Sync + 'static
+{
+    use warp::filters::{
+        path::{full, FullPath},
+        query::raw,
+    };
+    let both = raw()
+        .and(full())
+        .map(|query: String, path: FullPath| R::parse_strs(path.as_str(), &query));
     let just_path = full().map(|path: FullPath| R::parse_strs(path.as_str(), ""));
     both.or(just_path).unify()
 }
@@ -25,7 +31,8 @@ pub trait Dispatch: Sized + Send + Sync + 'static {
         warp::reply::with_status(
             warp::reply::html("<h1>Not found</h1>"),
             warp::http::StatusCode::NOT_FOUND,
-        ).into_response()
+        )
+        .into_response()
     }
 
     fn into_filter(self) -> warp::filters::BoxedFilter<(warp::reply::Response,)> {
@@ -33,7 +40,10 @@ pub trait Dispatch: Sized + Send + Sync + 'static {
     }
 }
 
-pub fn dispatch_filter<App: Dispatch>(app: App) -> impl Filter<Error = Infallible, Extract = (warp::reply::Response,)> + Clone + Send + Sync + 'static {
+pub fn dispatch_filter<App: Dispatch>(
+    app: App,
+) -> impl Filter<Error = Infallible, Extract = (warp::reply::Response,)> + Clone + Send + Sync + 'static
+{
     let app = std::sync::Arc::new(app);
     route_filter_option::<App::Route>().and_then(move |route: Option<App::Route>| {
         let app = app.clone();
