@@ -37,5 +37,7 @@ Possibly nothing. Possibly:
 * Adding a lower level Hyper-specific binding
     * This likely would come with other helper functions to build out a microframework for simple apps
 * Actually releasing what's already here to crates.io!
+* Support multipath pieces, e.g. a trailing `Vec` of `String`s
+* Support embedding other routes within this route, which may simply rely on the multipath concept
 
 If this is interesting, and you'd like to be a part, jump in! No guarantees on anything, but issues, PRs, and direct messages anywhere about your interest in the project are more likely to push me into turning this into something real.

@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Home</title>
+        <link rel="stylesheet" href="{{ style_css }}">
+    </head>
+    <body>
+        <h1>Hello World!!!</h1>
+        <p>Counter: {{ counter }}</p>
+        <ul>
+            {% for greet in greetings %}
+                <li>
+                    <a href="{{ greet.route }}">{{ greet.name }}</a>
+                </li>
+            {% endfor %}
+        </ul>
+    </body>
+</html>

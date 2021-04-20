@@ -9,5 +9,15 @@ edition = "2018"
 [dependencies]
 routetype = { path = "../routetype" }
 routetype-warp = { path = "../routetype-warp" }
+routetype-hyper = { path = "../routetype-hyper", features = ["askama"] }
 warp = "0.3"
 tokio = { version = "1", features = ["full"] }
+askama = ""
+
+[[bin]]
+name = "routetype-example-warp"
+path = "src/warp.rs"
+
+[[bin]]
+name = "routetype-example-hyper"
+path = "src/hyper.rs"
