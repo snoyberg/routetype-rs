@@ -5,7 +5,7 @@ pub mod raw;
 /// Route normalize, to ensure consistent and canonical representations.
 pub mod normalize;
 
-pub use routetype_derive::*;
+pub use routetype_derive::Route;
 use std::{borrow::Cow, collections::HashMap};
 
 use raw::*;
