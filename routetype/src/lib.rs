@@ -225,4 +225,16 @@ mod tests {
             true
         }
     }
+
+    #[test]
+    fn single_empty_string() {
+        let plainroute = PlainRoute {
+            path: vec!["".to_owned()],
+            query: None,
+        };
+        let rendered: String = plainroute.render();
+        assert_eq!(rendered, "/-");
+        let parsed: PlainRoute = PlainRoute::parse_str(&rendered).unwrap();
+        assert_eq!(plainroute, parsed);
+    }
 }
