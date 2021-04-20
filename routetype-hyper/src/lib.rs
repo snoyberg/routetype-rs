@@ -54,7 +54,7 @@ impl<T: Dispatch> DispatchServer<T> {
             let app = app.clone();
             async move {
                 Ok::<_, Infallible>(service_fn(move |req| {
-                    helper(addr.clone(), app.clone(), req)
+                    helper(addr, app.clone(), req)
                 }))
             }
         }));
