@@ -27,7 +27,7 @@ fn render_home() {
 
 #[test]
 fn render_style() {
-    assert_eq!(MyRoute::Style.render(), "/style%2Ecss"); // FIXME don't want to percent encoding periods
+    assert_eq!(MyRoute::Style.render(), "/style.css");
 }
 
 #[test]

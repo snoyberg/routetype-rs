@@ -216,9 +216,40 @@ mod tests {
     use super::*;
     use quickcheck::*;
 
+    /// Remove unsupported query string pairs
+    ///
+    /// This is basically a hack to handle the weird corner case of `[("", None)]`, which looks identical to no query string.
+    ///
+    /// Arguably we could use the same all-dashes hack as with path segments, but that will probably cause problems.
+    fn remove_unsupported_query(query: Vec<(String, Option<String>)>) -> Vec<(String, Option<String>)> {
+        if query.len() == 1 && query[0].0.is_empty() && query[0].1.is_none() {
+            vec![]
+        } else {
+            query
+        }
+    }
+
     quickcheck! {
         fn prop_round_trip_plainroute(path: Vec<String>, query: Option<Vec<(String, Option<String>)>>) -> bool {
+            let query = query.map(remove_unsupported_query);
             let plainroute = PlainRoute { path, query };
+            let rendered: String = plainroute.render();
+            let parsed: PlainRoute = PlainRoute::parse_str(&rendered).unwrap();
+            assert_eq!(plainroute, parsed);
+            true
+        }
+
+        fn prop_round_trip_plain_path(path: Vec<String>) -> bool {
+            let plainroute = PlainRoute { path, query: None };
+            let rendered: String = plainroute.render();
+            let parsed: PlainRoute = PlainRoute::parse_str(&rendered).unwrap();
+            assert_eq!(plainroute, parsed);
+            true
+        }
+
+        fn prop_round_trip_plain_query(query: Vec<(String, Option<String>)>) -> bool {
+            let query = remove_unsupported_query(query);
+            let plainroute = PlainRoute { path: vec![], query: Some(query) };
             let rendered: String = plainroute.render();
             let parsed: PlainRoute = PlainRoute::parse_str(&rendered).unwrap();
             assert_eq!(plainroute, parsed);
@@ -234,6 +265,42 @@ mod tests {
         };
         let rendered: String = plainroute.render();
         assert_eq!(rendered, "/-");
+        let parsed: PlainRoute = PlainRoute::parse_str(&rendered).unwrap();
+        assert_eq!(plainroute, parsed);
+    }
+
+    #[test]
+    fn single_query_value_amp() {
+        let plainroute = PlainRoute {
+            path: vec![],
+            query: Some(vec![("".to_owned(), Some("&".to_owned()))]),
+        };
+        let rendered: String = plainroute.render();
+        assert_eq!(rendered, "/?=%26");
+        let parsed: PlainRoute = PlainRoute::parse_str(&rendered).unwrap();
+        assert_eq!(plainroute, parsed);
+    }
+
+    #[test]
+    fn single_query_value_equal() {
+        let plainroute = PlainRoute {
+            path: vec![],
+            query: Some(vec![("".to_owned(), Some("=".to_owned()))]),
+        };
+        let rendered: String = plainroute.render();
+        assert_eq!(rendered, "/?=%3D");
+        let parsed: PlainRoute = PlainRoute::parse_str(&rendered).unwrap();
+        assert_eq!(plainroute, parsed);
+    }
+
+    #[test]
+    fn looks_url_encoded() {
+        let plainroute = PlainRoute {
+            path: vec![],
+            query: Some(vec![("".to_owned(), Some("%00".to_owned()))]),
+        };
+        let rendered: String = plainroute.render();
+        assert_eq!(rendered, "/?=%2500");
         let parsed: PlainRoute = PlainRoute::parse_str(&rendered).unwrap();
         assert_eq!(plainroute, parsed);
     }

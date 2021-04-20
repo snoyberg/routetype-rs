@@ -757,6 +757,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "routetype-hyper"
+version = "0.1.0"
+dependencies = [
+ "hyper",
+ "routetype",
+]
+
+[[package]]
 name = "routetype-warp"
 version = "0.1.0"
 dependencies = [
