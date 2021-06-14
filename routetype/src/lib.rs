@@ -80,18 +80,11 @@ pub trait Route: Sized + Clone + Send + Sync + 'static {
     fn render(&self) -> String {
         render_path_and_query(
             self.path().iter().map(|x| x.as_ref()),
-            match self.query() {
-                None => None,
-                Some(ref query) => Some(query.iter().map(|(k, v)| {
-                    (
-                        k.as_ref(),
-                        match v {
-                            Some(v) => Some(v.as_ref()),
-                            None => None,
-                        },
-                    )
-                })),
-            },
+            self.query().as_ref().map(|query| {
+                query
+                    .iter()
+                    .map(|(k, v)| (k.as_ref(), v.as_ref().map(|v| v.as_ref())))
+            }),
         )
     }
 }
@@ -213,23 +206,17 @@ impl Route for PlainRoute {
     }
 
     fn query(&self) -> Option<Vec<QueryPair>> {
-        match self.query {
-            None => None,
-            Some(ref query) => Some(
-                query
-                    .iter()
-                    .map(|(k, v)| {
-                        (
-                            Cow::Borrowed(k.as_ref()),
-                            match v {
-                                None => None,
-                                Some(v) => Some(Cow::Borrowed(v.as_ref())),
-                            },
-                        )
-                    })
-                    .collect(),
-            ),
-        }
+        self.query.as_ref().map(|query| {
+            query
+                .iter()
+                .map(|(k, v)| {
+                    (
+                        Cow::Borrowed(k.as_ref()),
+                        v.as_ref().map(|v| Cow::Borrowed(v.as_ref())),
+                    )
+                })
+                .collect()
+        })
     }
 }
 
