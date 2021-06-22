@@ -6,6 +6,7 @@ edition = "2018"
 
 [features]
 default = []
+grpc = ["tonic"]
 
 [dependencies]
 routetype = { path = "../routetype" }
@@ -13,3 +14,4 @@ hyper = { version = "0.14", features = ["server"] }
 async-trait = "0.1.50"
 askama = { version = "0.10.5", optional = true }
 anyhow = "1"
+tonic = { version = "0.4.3", features = ["transport"], optional = true }

@@ -11,6 +11,9 @@ use std::{convert::Infallible, future::Future, net::SocketAddr, pin::Pin, sync::
 #[cfg(feature = "askama")]
 pub use askama::Template;
 
+#[cfg(feature = "tonic")]
+mod grpc;
+
 pub mod respond;
 
 pub struct DispatchInput<D: Dispatch> {
@@ -83,6 +86,10 @@ impl<T: Dispatch> DispatchServer<T> {
         if let Err(e) = server.await {
             panic!("Hyper server exited with error: {}", e);
         }
+    }
+
+    pub fn get_arc(&self) -> Arc<T> {
+        self.0.clone()
     }
 }
 
