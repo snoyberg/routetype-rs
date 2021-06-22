@@ -55,9 +55,25 @@ impl<B: Into<hyper::Body>> DispatchOutput for Result<hyper::Response<B>> {
 }
 
 pub struct DispatchServer<T>(Arc<T>);
+
+impl<T> Clone for DispatchServer<T> {
+    fn clone(&self) -> Self {
+        DispatchServer(self.0.clone())
+    }
+}
+
 pub struct DispatchServerConn<T> {
-    addr: SocketAddr,
-    app: Arc<T>,
+    pub addr: SocketAddr,
+    pub app: Arc<T>,
+}
+
+impl<T> Clone for DispatchServerConn<T> {
+    fn clone(&self) -> Self {
+        DispatchServerConn {
+            addr: self.addr,
+            app: self.app.clone(),
+        }
+    }
 }
 
 impl<T: Dispatch> DispatchServer<T> {
