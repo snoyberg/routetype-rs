@@ -1,6 +1,10 @@
 use std::task::Poll;
 
-use hyper::{HeaderMap, body::HttpBody, service::{make_service_fn, service_fn}};
+use hyper::{
+    body::HttpBody,
+    service::{make_service_fn, service_fn},
+    HeaderMap,
+};
 use tonic::body::BoxBody;
 
 use super::*;
@@ -8,12 +12,16 @@ use super::*;
 type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 impl<T: Dispatch> DispatchServer<T> {
-    pub async fn run_with_grpc<GrpcService, F>(self, addr: impl Into<SocketAddr>, make_grpc_service: F)
-    where
-        GrpcService: Service<Request<Body>, Response = Response<BoxBody>, Error = Error> + 'static + Send,
+    pub async fn run_with_grpc<GrpcService, F>(
+        self,
+        addr: impl Into<SocketAddr>,
+        make_grpc_service: F,
+    ) where
+        GrpcService:
+            Service<Request<Body>, Response = Response<BoxBody>, Error = Error> + 'static + Send,
         GrpcService::Future: Send,
         //GrpcService::Error: std::error::Error + Send + Sync,
-        F: FnMut(Arc<T>) -> GrpcService + Send + Clone + 'static
+        F: FnMut(Arc<T>) -> GrpcService + Send + Clone + 'static,
     {
         let web = self.0;
         let addr = addr.into();
