@@ -4,12 +4,9 @@ pub use hyper::{
     header::{HeaderName, HeaderValue},
     Body, Request, Response, StatusCode,
 };
-use hyper::{
-    server::conn::AddrStream,
-    service::{make_service_fn, service_fn},
-};
+use hyper::{server::conn::AddrStream, service::Service};
 pub use routetype::*;
-use std::{convert::Infallible, net::SocketAddr, sync::Arc};
+use std::{convert::Infallible, future::Future, net::SocketAddr, pin::Pin, sync::Arc};
 
 #[cfg(feature = "askama")]
 pub use askama::Template;
@@ -33,7 +30,7 @@ pub trait Dispatch: Sized + Send + Sync + 'static {
     }
 
     fn into_server(self) -> DispatchServer<Self> {
-        DispatchServer(self)
+        DispatchServer(Arc::new(self))
     }
 }
 
@@ -57,24 +54,58 @@ impl<B: Into<hyper::Body>> DispatchOutput for Result<hyper::Response<B>> {
     }
 }
 
-pub struct DispatchServer<T>(T);
+pub struct DispatchServer<T>(Arc<T>);
+pub struct DispatchServerConn<T> {
+    addr: SocketAddr,
+    app: Arc<T>,
+}
 
 impl<T: Dispatch> DispatchServer<T> {
     pub async fn run(self, addr: impl Into<SocketAddr>) {
         let addr = addr.into();
-        let app = Arc::new(self.0);
-        let server = hyper::Server::bind(&addr).serve(make_service_fn(move |conn: &AddrStream| {
-            let addr = conn.remote_addr();
-            let app = app.clone();
-            async move {
-                Ok::<_, Infallible>(service_fn(move |req| {
-                    helper(addr, app.clone(), req)
-                }))
-            }
-        }));
+        let server = hyper::Server::bind(&addr).serve(self);
         if let Err(e) = server.await {
             panic!("Hyper server exited with error: {}", e);
         }
+    }
+}
+
+impl<T> Service<&AddrStream> for DispatchServer<T> {
+    type Response = DispatchServerConn<T>;
+    type Error = Infallible;
+    type Future = std::future::Ready<Result<Self::Response, Self::Error>>;
+
+    fn poll_ready(
+        &mut self,
+        _cx: &mut std::task::Context,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: &AddrStream) -> Self::Future {
+        std::future::ready(Ok(DispatchServerConn {
+            addr: req.remote_addr(),
+            app: self.0.clone(),
+        }))
+    }
+}
+
+impl<T: Dispatch> Service<Request<Body>> for DispatchServerConn<T> {
+    type Response = Response<Body>;
+    type Error = Infallible;
+    #[allow(clippy::clippy::type_complexity)]
+    type Future =
+        Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + 'static + Send>>;
+
+    fn poll_ready(
+        &mut self,
+        _cx: &mut std::task::Context,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: Request<Body>) -> Self::Future {
+        Box::pin(helper(self.addr, self.app.clone(), req))
     }
 }
 
