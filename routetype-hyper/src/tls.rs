@@ -394,3 +394,37 @@ impl<T: crate::Dispatch> crate::DispatchServer<T> {
             .context("Error while running TLS server")
     }
 }
+
+#[cfg(feature = "tonic")]
+impl<T, GrpcService, F> crate::grpc::DispatchServerWithGrpc<T, GrpcService, F>
+where
+    T: crate::Dispatch,
+    GrpcService: hyper::service::Service<
+            hyper::Request<hyper::Body>,
+            Response = hyper::Response<tonic::body::BoxBody>,
+            Error = crate::grpc::Error,
+        >
+        + 'static
+        + Send,
+    GrpcService::Future: Send,
+    //GrpcService::Error: std::error::Error + Send + Sync,
+    F: FnMut(Arc<T>) -> GrpcService + Send + Clone + 'static,
+{
+    pub async fn run_tls(
+        self,
+        addr: impl Into<SocketAddr>,
+        config: TlsConfigBuilder,
+    ) -> anyhow::Result<()> {
+        use anyhow::*;
+
+        let config = config.build().context("Unable to construct TLS config")?;
+        let addr = addr.into();
+        let addr_incoming = hyper::server::conn::AddrIncoming::bind(&addr)
+            .with_context(|| format!("Unable to bind TLS address {}", addr))?;
+        let acceptor = crate::tls::TlsAcceptor::new(config, addr_incoming);
+        hyper::Server::builder(acceptor)
+            .serve(self)
+            .await
+            .context("Error while running TLS server")
+    }
+}

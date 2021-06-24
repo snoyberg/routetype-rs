@@ -5,7 +5,7 @@ use tonic::body::BoxBody;
 
 use super::*;
 
-type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
+pub(crate) type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 impl<T> DispatchServer<T> {
     pub fn with_grpc<GrpcService, F>(self, f: F) -> DispatchServerWithGrpc<T, GrpcService, F>
@@ -172,4 +172,22 @@ where
 
 fn map_option_err<T, U: Into<Error>>(err: Option<Result<T, U>>) -> Option<Result<T, Error>> {
     err.map(|e| e.map_err(Into::into))
+}
+
+impl<T, GrpcService, F> DispatchServerWithGrpc<T, GrpcService, F>
+where
+    T: Dispatch,
+    GrpcService:
+        Service<Request<Body>, Response = Response<BoxBody>, Error = Error> + 'static + Send,
+    GrpcService::Future: Send,
+    //GrpcService::Error: std::error::Error + Send + Sync,
+    F: FnMut(Arc<T>) -> GrpcService + Send + Clone + 'static,
+{
+    pub async fn run(self, addr: impl Into<SocketAddr>) -> Result<()> {
+        let addr = addr.into();
+        hyper::Server::bind(&addr)
+            .serve(self)
+            .await
+            .context("Hyper server failed")
+    }
 }
