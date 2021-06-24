@@ -79,7 +79,7 @@ where
 {
     type Response = Response<EitherBody<BoxBody, Body>>;
     type Error = Error;
-    #[allow(clippy::clippy::type_complexity)]
+    #[allow(clippy::type_complexity)]
     type Future =
         Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + 'static + Send>>;
 

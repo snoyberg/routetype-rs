@@ -135,7 +135,7 @@ impl<Req: RemoteAddr, T> Service<Req> for DispatchServer<T> {
 impl<T: Dispatch> Service<Request<Body>> for DispatchServerConn<T> {
     type Response = Response<Body>;
     type Error = Infallible;
-    #[allow(clippy::clippy::type_complexity)]
+    #[allow(clippy::type_complexity)]
     type Future =
         Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + 'static + Send>>;
 

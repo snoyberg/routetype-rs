@@ -77,7 +77,7 @@ impl std::fmt::Debug for TlsConfigBuilder {
 
 impl TlsConfigBuilder {
     /// Create a new TlsConfigBuilder
-    #[allow(clippy::clippy::new_without_default)]
+    #[allow(clippy::new_without_default)]
     pub fn new() -> TlsConfigBuilder {
         TlsConfigBuilder {
             key: Box::new(io::empty()),
