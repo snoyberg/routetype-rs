@@ -7,6 +7,8 @@ edition = "2018"
 [features]
 default = []
 grpc = ["tonic"]
+tls = ["tokio-rustls"]
+full = ["grpc", "tls", "askama"]
 
 [dependencies]
 routetype = { path = "../routetype" }
@@ -15,3 +17,6 @@ async-trait = "0.1.50"
 askama = { version = "0.10.5", optional = true }
 anyhow = "1"
 tonic = { version = "0.4.3", features = ["transport"], optional = true }
+tokio-rustls = { version = "0.22", optional = true }
+tokio = "1"
+futures = "0.3"

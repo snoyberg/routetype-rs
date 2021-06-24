@@ -9,10 +9,11 @@ edition = "2018"
 [dependencies]
 routetype = { path = "../routetype" }
 routetype-warp = { path = "../routetype-warp" }
-routetype-hyper = { path = "../routetype-hyper", features = ["askama", "tonic"] }
+routetype-hyper = { path = "../routetype-hyper", features = ["full"] }
 warp = "0.3"
 tokio = { version = "1", features = ["full"] }
 askama = "0.10"
+rust-embed = "5.9"
 
 [[bin]]
 name = "routetype-example-warp"

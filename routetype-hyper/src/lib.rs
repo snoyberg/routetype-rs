@@ -14,6 +14,9 @@ pub use askama::Template;
 #[cfg(feature = "tonic")]
 mod grpc;
 
+#[cfg(feature = "tokio-rustls")]
+pub mod tls;
+
 pub mod respond;
 
 pub struct DispatchInput<D: Dispatch> {
@@ -80,12 +83,12 @@ impl<T> Clone for DispatchServerConn<T> {
 }
 
 impl<T: Dispatch> DispatchServer<T> {
-    pub async fn run(self, addr: impl Into<SocketAddr>) {
+    pub async fn run(self, addr: impl Into<SocketAddr>) -> Result<()> {
         let addr = addr.into();
-        let server = hyper::Server::bind(&addr).serve(self);
-        if let Err(e) = server.await {
-            panic!("Hyper server exited with error: {}", e);
-        }
+        hyper::Server::bind(&addr)
+            .serve(self)
+            .await
+            .context("Hyper server failed")
     }
 
     pub fn get_arc(&self) -> Arc<T> {
@@ -93,7 +96,23 @@ impl<T: Dispatch> DispatchServer<T> {
     }
 }
 
-impl<T> Service<&AddrStream> for DispatchServer<T> {
+pub trait RemoteAddr {
+    fn remote_addr(self) -> SocketAddr;
+}
+
+impl RemoteAddr for &AddrStream {
+    fn remote_addr(self) -> SocketAddr {
+        AddrStream::remote_addr(self)
+    }
+}
+
+impl RemoteAddr for &crate::tls::TlsStream {
+    fn remote_addr(self) -> SocketAddr {
+        self.remote_addr
+    }
+}
+
+impl<Req: RemoteAddr, T> Service<Req> for DispatchServer<T> {
     type Response = DispatchServerConn<T>;
     type Error = Infallible;
     type Future = std::future::Ready<Result<Self::Response, Self::Error>>;
@@ -105,7 +124,7 @@ impl<T> Service<&AddrStream> for DispatchServer<T> {
         std::task::Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, req: &AddrStream) -> Self::Future {
+    fn call(&mut self, req: Req) -> Self::Future {
         std::future::ready(Ok(DispatchServerConn {
             addr: req.remote_addr(),
             app: self.0.clone(),
@@ -132,7 +151,7 @@ impl<T: Dispatch> Service<Request<Body>> for DispatchServerConn<T> {
     }
 }
 
-async fn helper<T: Dispatch>(
+pub(crate) async fn helper<T: Dispatch>(
     remote: SocketAddr,
     app: Arc<T>,
     request: Request<Body>,

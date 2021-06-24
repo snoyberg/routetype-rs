@@ -1,5 +1,7 @@
 use routetype_hyper::*;
+use rust_embed::RustEmbed;
 use std::sync::atomic::AtomicUsize;
+use tokio::try_join;
 
 #[derive(Route, Clone, PartialEq, Debug)]
 enum MyRoute {
@@ -93,10 +95,24 @@ async fn get_hello(_input: DispatchInput<MyApp>, name: String) -> Result<Respons
     })
 }
 
+#[derive(RustEmbed)]
+#[folder = "assets"]
+struct Assets;
+
 #[tokio::main]
-async fn main() {
-    MyApp::default()
-        .into_server()
-        .run(([127, 0, 0, 1], 3000))
-        .await;
+async fn main() -> Result<()> {
+    let server = MyApp::default().into_server();
+
+    let plain = server.clone().run(([0, 0, 0, 0], 3000));
+
+    let key = Assets::get("localhost.key").context("localhost.key not found")?;
+    let crt = Assets::get("localhost.crt").context("localhost.crt not found")?;
+    let config = routetype_hyper::tls::TlsConfigBuilder::new()
+        .key(&key)
+        .cert(&crt);
+    let tls = server.run_tls(([0, 0, 0, 0], 3443), config);
+
+    try_join!(plain, tls)?;
+
+    Ok(())
 }
