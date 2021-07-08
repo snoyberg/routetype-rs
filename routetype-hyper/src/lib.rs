@@ -176,7 +176,22 @@ pub(crate) async fn helper<T: Dispatch>(
     let res = match output {
         Ok(res) => res,
         Err(e) => {
-            let mut res = respond::html(e.to_string());
+            let uuid = uuid::Uuid::new_v4();
+            log::error!("New unhandled error message {}: {:?}", uuid, e);
+            let mut res = respond::html(format!(
+                r#"
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Unhandled error</title>
+  </head>
+  <body>
+    <h1>Unhandled error</h1>
+    <p>Error code is <code>{uuid}</code></p>
+  </body>
+</html>"#,
+                uuid = uuid
+            ));
             *res.status_mut() = hyper::StatusCode::INTERNAL_SERVER_ERROR;
             res
         }

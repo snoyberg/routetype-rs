@@ -20,3 +20,5 @@ tonic = { version = "0.4.3", features = ["transport"], optional = true }
 tokio-rustls = { version = "0.22", optional = true }
 tokio = "1"
 futures = "0.3"
+log = "0.4"
+uuid = { version = "0.8.2", features = ["v4"] }
