@@ -106,6 +106,7 @@ impl RemoteAddr for &AddrStream {
     }
 }
 
+#[cfg(feature = "tokio-rustls")]
 impl RemoteAddr for &crate::tls::TlsStream {
     fn remote_addr(self) -> SocketAddr {
         self.remote_addr
